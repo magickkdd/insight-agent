@@ -111,27 +111,26 @@ def make_research_one(llm: ChatOpenAI, settings: Settings, pool: EvidencePool):
     深读全败时降级回摘要模式并打 ⚠degraded 标记。
     """
     max_docs = DEPTH_MAX_DOCS[settings.research_depth]
-    tavily = TavilySearch(max_results=8)
+    from insight_agent.tools.search_router import (
+        BochaProvider,
+        DuckDuckGoProvider,
+        SearchRouter,
+        TavilyProvider,
+    )
+
+    providers = [TavilyProvider(settings.tavily_api_key)]
+    if settings.bocha_api_key:
+        providers.append(BochaProvider(settings.bocha_api_key))
+    providers.append(DuckDuckGoProvider())
+    router = SearchRouter(providers)
     blocked = {d.strip() for d in settings.fetch_block_domains.split(",") if d.strip()}
 
     def _search(query: str) -> list[dict]:
-        for _ in range(2):  # 搜索失败重试 1 次
-            try:
-                raw = tavily.invoke({"query": query})
-                results = raw.get("results", []) if isinstance(raw, dict) else []
-                if results:
-                    return [
-                        {
-                            "title": r.get("title", ""),
-                            "url": r.get("url", ""),
-                            "snippet": r.get("content", ""),
-                        }
-                        for r in results
-                        if r.get("url")
-                    ]
-            except Exception:  # noqa: BLE001 - 搜索异常换姿势重试
-                continue
-        return []
+        batch = router.search(query, max_results=8)
+        return [
+            {"title": r.title, "url": r.url, "snippet": r.snippet}
+            for r in batch.results
+        ]
 
     def research_one(state: dict) -> dict:
         question = state["question"]

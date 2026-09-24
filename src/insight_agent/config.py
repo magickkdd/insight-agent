@@ -23,6 +23,7 @@ class Settings:
     verify_enabled: str = "auto"          # auto | true | false（auto = standard/deep 开）
     verify_max_claims: int = 30
     verify_concurrency: int = 4
+    bocha_api_key: str = ""               # 博查搜索（国内直连，可选）
 
 
 def load_settings(env_path: str = ".env") -> Settings:
@@ -48,4 +49,5 @@ def load_settings(env_path: str = ".env") -> Settings:
         verify_enabled=os.environ.get("VERIFY_ENABLED", "auto"),
         verify_max_claims=int(os.environ.get("VERIFY_MAX_CLAIMS", "30")),
         verify_concurrency=int(os.environ.get("VERIFY_CONCURRENCY", "4")),
+        bocha_api_key=os.environ.get("BOCHA_API_KEY", ""),
     )
