@@ -18,7 +18,7 @@ from openai import OpenAI, RateLimitError
 
 from insight_agent.config import Settings
 from insight_agent.eval.dataset import EvalCase
-from insight_agent.eval.judge import run_judge
+from insight_agent.eval.judge import run_judge, run_judge_multi
 from insight_agent.eval.metrics import summarize_tokens
 
 
@@ -33,6 +33,8 @@ class CaseResult:
     error_kind: str | None = None  # rate_limit / exception / None
     error: str | None = None
     output_chars: int = 0
+    hallucination_rate: float | None = None  # 模块 B 验证层产出（e2e）
+    claim_score: float | None = None
 
 
 @dataclass
@@ -64,11 +66,21 @@ def _score(case: EvalCase, output: str, sub_questions: list[str], latency: float
         checks.append({"name": "min_links", "passed": n >= e.min_links, "detail": f"来源链接 {n} 个 ≥ {e.min_links}"})
     if e.max_latency_s is not None:
         checks.append({"name": "max_latency_s", "passed": latency <= e.max_latency_s, "detail": f"时延 {latency:.0f}s ≤ {e.max_latency_s}s"})
+    if e.key_points:
+        # golden set 要点覆盖率："|"分隔同义写法，命中任一算覆盖（规格 §3.3）
+        covered = sum(
+            1 for point in e.key_points
+            if any(alt in output for alt in point.split("|"))
+        )
+        ratio = covered / len(e.key_points)
+        need = e.key_points_min if e.key_points_min is not None else 1.0
+        checks.append({"name": "key_points_coverage", "passed": ratio >= need,
+                       "detail": f"要点覆盖 {covered}/{len(e.key_points)} = {ratio:.0%}（需 ≥ {need:.0%}）"})
     return checks
 
 
-def _invoke_case(case: EvalCase, settings, store_root: Path, handler) -> tuple[str, list[str], dict]:
-    """按层执行被测对象，返回 (输出文本, 提纲, token 总量)。
+def _invoke_case(case: EvalCase, settings, store_root: Path, handler) -> tuple[str, list[str], dict, dict]:
+    """按层执行被测对象，返回 (输出文本, 提纲, token 总量, verification)。
 
     关键：每条用例构造专属 LLM 实例，回调挂进构造函数 ——
     实例回调自动传播到它的所有调用（含 with_structured_output
@@ -88,23 +100,28 @@ def _invoke_case(case: EvalCase, settings, store_root: Path, handler) -> tuple[s
 
     if case.node == "planner":
         out = make_planner(llm)({"topic": case.topic, "existing_digest": case.existing_digest})
-        return "", out["brief"], summarize_tokens(handler)
+        return "", out["brief"], summarize_tokens(handler), {}
     if case.node == "writer":
         out = make_writer(llm)(
             {"topic": case.topic, "existing_notes": "", "compressed_findings": case.evidence}
         )
-        return out["report"], [], summarize_tokens(handler)
+        return out["report"], [], summarize_tokens(handler), {}
     # e2e：全流水线
     graph = build_research_graph(llm, notes_store=NotesStore(store_root / "e2e_notes"), settings=settings)
     result = graph.invoke({"topic": case.topic}, config={"callbacks": [handler]})
-    return result["report"], result["brief"], summarize_tokens(handler)
+    return (
+        result["report"],
+        result["brief"],
+        summarize_tokens(handler),
+        result.get("verification", {}),
+    )
 
 
 def run_case(case: EvalCase, settings, judge_client: OpenAI | None, judge_model: str, store_root: Path) -> CaseResult:
     t0 = time.perf_counter()
     handler = UsageMetadataCallbackHandler()
     try:
-        output, sub_questions, tokens = _invoke_case(case, settings, store_root, handler)
+        output, sub_questions, tokens, verification = _invoke_case(case, settings, store_root, handler)
     except RateLimitError as e:
         return CaseResult(case.id, case.tier, False, [], {}, time.perf_counter() - t0, "rate_limit", f"API 限流：{str(e)[:100]}")
     except Exception as e:  # noqa: BLE001
@@ -113,7 +130,11 @@ def run_case(case: EvalCase, settings, judge_client: OpenAI | None, judge_model:
     latency = time.perf_counter() - t0
     checks = _score(case, output, sub_questions, latency)
     if case.judge and judge_client is not None:
-        ok, detail = run_judge(judge_client, judge_model, case.judge, output)
+        # e2e 层用多票制（规格 §3.2），unit 层单票省额度
+        if case.tier == "e2e":
+            ok, detail = run_judge_multi(judge_client, judge_model, case.judge, output)
+        else:
+            ok, detail = run_judge(judge_client, judge_model, case.judge, output)
         checks.append({"name": "judge", "passed": ok, "detail": detail})
     return CaseResult(
         case_id=case.id,
@@ -123,4 +144,6 @@ def run_case(case: EvalCase, settings, judge_client: OpenAI | None, judge_model:
         tokens=tokens,
         latency_s=latency,
         output_chars=len(output),
+        hallucination_rate=verification.get("hallucination_rate"),
+        claim_score=verification.get("score"),
     )

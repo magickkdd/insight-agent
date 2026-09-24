@@ -262,3 +262,55 @@
   expect:
     contains_all: ["## 核心发现"]
     min_links: 2
+
+# ============ golden set（人工标注要点，5 条）============
+
+- id: e2e-golden-langgraph-009
+  tier: e2e
+  topic: "LangGraph 框架的核心概念与适用场景"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 2
+    key_points: ["状态|State", "节点|node", "图|Graph", "检查点|checkpoint|持久化"]
+    key_points_min: 0.75
+  judge: "报告对 LangGraph 的描述是否准确且非编造？"
+
+- id: e2e-golden-tavily-010
+  tier: e2e
+  topic: "Tavily 搜索 API 的功能与定价"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 2
+    key_points: ["API|搜索", "免费|额度|credit", "定价|收费|价格"]
+    key_points_min: 0.66
+  judge: "定价与功能描述是否有来源支撑？"
+
+- id: e2e-golden-agent-harness-011
+  tier: e2e
+  topic: "Agent Harness 工程的最新实践"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 2
+    key_points: ["工具调用|tool|工具", "记忆|memory|上下文", "评测|eval|基准|benchmark"]
+    key_points_min: 0.66
+  judge: "报告是否覆盖了 harness 的多个维度而非单一话题？"
+
+- id: e2e-golden-ev-battery-012
+  tier: e2e
+  topic: "固态电池的最新量产进展"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 2
+    key_points: ["量产|装车|产线", "厂商|企业|玩家", "时间表|2026|2027|2028"]
+    key_points_min: 0.66
+  judge: "时间表信息是否有明确出处？"
+
+- id: e2e-golden-coding-agent-013
+  tier: e2e
+  topic: "Coding Agent 的最新发展与竞争格局"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 2
+    key_points: ["Claude|Cursor|Copilot|Claude Code", "开源|GitHub", "中国|国产|国内"]
+    key_points_min: 0.66
+  judge: "竞争格局是否覆盖了国际与国内两个市场？"

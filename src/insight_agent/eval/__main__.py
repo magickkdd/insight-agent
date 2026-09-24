@@ -118,12 +118,13 @@ def render_markdown(results, regression: dict, stamp: str) -> str:
         lines += [f"- `{r['case_id']}`：{r['detail']}" for r in regression["regressions"]]
         lines.append("")
     lines += [
-        "| 用例 | 层 | 状态 | Tokens | 时延(s) |",
-        "|---|---|---|---|---|",
+        "| 用例 | 层 | 状态 | Tokens | 时延(s) | 幻觉率 |",
+        "|---|---|---|---|---|---|",
     ]
     for r in results:
         status = "ERROR" if r.error_kind else ("PASS" if r.passed else "FAIL")
-        lines.append(f"| {r.case_id} | {r.tier} | {status} | {sum(r.tokens.values())} | {r.latency_s:.1f} |")
+        hr = "—" if r.hallucination_rate is None else f"{r.hallucination_rate:.0%}"
+        lines.append(f"| {r.case_id} | {r.tier} | {status} | {sum(r.tokens.values())} | {r.latency_s:.1f} | {hr} |")
     return "\n".join(lines)
 
 

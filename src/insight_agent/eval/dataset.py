@@ -29,6 +29,8 @@ _EXPECT_KEYS = {
     "contains_all",
     "min_links",
     "max_latency_s",
+    "key_points",
+    "key_points_min",
 }
 
 
@@ -40,6 +42,8 @@ class Expectations:
     contains_all: list[str] = field(default_factory=list)
     min_links: int | None = None
     max_latency_s: float | None = None
+    key_points: list[str] = field(default_factory=list)  # golden set：标准答案要点，"|"分隔同义写法
+    key_points_min: float | None = None                  # 要点覆盖率下限（0-1）
 
 
 @dataclass

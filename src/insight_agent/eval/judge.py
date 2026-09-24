@@ -23,13 +23,19 @@ def _extract_json_object(text: str) -> str:
 
 
 def run_judge(client: OpenAI, model: str, rubric: str, content: str) -> tuple[bool, str]:
+    return run_judge_single(client, model, rubric, content, temperature=0.0)
+
+
+def run_judge_single(
+    client: OpenAI, model: str, rubric: str, content: str, *, temperature: float
+) -> tuple[bool, str]:
     resp = client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": JUDGE_PROMPT},
             {"role": "user", "content": f"评判问题：{rubric}\n\n被评内容：\n{content[:6000]}"},
         ],
-        temperature=0,
+        temperature=temperature,
     )
     raw = resp.choices[0].message.content or ""
     try:
@@ -37,3 +43,19 @@ def run_judge(client: OpenAI, model: str, rubric: str, content: str) -> tuple[bo
         return data.get("verdict") == "PASS", f"judge={data.get('verdict')}：{data.get('reason', '')}"
     except (ValueError, json.JSONDecodeError) as e:
         return False, f"judge 输出无法解析（{e}）"
+
+
+def run_judge_multi(
+    client: OpenAI, model: str, rubric: str, content: str, *, votes: int = 3
+) -> tuple[bool, str]:
+    """多票制（规格 §3.2）：不同温度投 3 票，多数决；一致率不足标注低置信。"""
+    temps = (0.0, 0.3, 0.7)[:votes]
+    results, last_detail = [], ""
+    for t in temps:
+        ok, detail = run_judge_single(client, model, rubric, content, temperature=t)
+        results.append(ok)
+        last_detail = detail
+    agrees = sum(results) / len(results)
+    majority = sum(results) > len(results) / 2
+    conf = "" if agrees == 1.0 else f"（⚠低置信 {agrees:.0%}）"
+    return majority, f"{last_detail}{conf}｜多票 {sum(results)}/{len(results)}"
