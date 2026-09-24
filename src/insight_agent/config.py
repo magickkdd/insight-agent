@@ -19,6 +19,10 @@ class Settings:
     embedding_provider: str = "auto"      # api | local | keyword | auto
     embedding_model: str = "text-embedding-3-small"
     fetch_block_domains: str = ""         # 逗号分隔黑名单
+    # ---- 验证层（规格 §2.4）----
+    verify_enabled: str = "auto"          # auto | true | false（auto = standard/deep 开）
+    verify_max_claims: int = 30
+    verify_concurrency: int = 4
 
 
 def load_settings(env_path: str = ".env") -> Settings:
@@ -41,4 +45,7 @@ def load_settings(env_path: str = ".env") -> Settings:
         embedding_provider=os.environ.get("EMBEDDING_PROVIDER", "auto"),
         embedding_model=os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small"),
         fetch_block_domains=os.environ.get("FETCH_BLOCK_DOMAINS", ""),
+        verify_enabled=os.environ.get("VERIFY_ENABLED", "auto"),
+        verify_max_claims=int(os.environ.get("VERIFY_MAX_CLAIMS", "30")),
+        verify_concurrency=int(os.environ.get("VERIFY_CONCURRENCY", "4")),
     )

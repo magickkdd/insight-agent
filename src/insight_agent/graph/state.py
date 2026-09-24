@@ -16,5 +16,7 @@ class ResearchState(TypedDict):
     brief: list[str]          # planner：增量子问题清单（空 = 已充分覆盖）
     findings: Annotated[list[str], operator.add]  # 各并行研究员的证据（自动汇聚）
     compressed_findings: str  # compress：超长证据压缩后的版本
-    report: str               # writer：最终报告
+    report: str               # writer：最终报告（clean 版）
+    annotated_report: str     # verify：逐句标注版（unsupported/partial 加 ⚠️）
+    verification: dict        # verify：VerificationReport.to_dict()
     saved: bool               # archive：是否写回笔记库

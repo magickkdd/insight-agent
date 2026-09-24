@@ -102,16 +102,16 @@ def make_planner(llm: ChatOpenAI):
 DEPTH_MAX_DOCS = {"fast": 0, "standard": 2, "deep": 5}  # 每子问题深读篇数（规格 §1.6）
 
 
-def make_research_one(llm: ChatOpenAI, settings: Settings):
+def make_research_one(llm: ChatOpenAI, settings: Settings, pool: EvidencePool):
     """单问题研究员：并行 fan-out 的"工人"（规格 §1.4 七步流程）。
 
+    深读产出的 chunk 写入**共享证据池**（verify 节点要用它逐句核对）。
     fast 档：只用搜索摘要（不深读，无 degraded 标记——这是档位的本意）。
     standard/deep 档：搜索 → LLM 选 URL → 并行深读 → 语义检索相关段落 → 成文；
     深读全败时降级回摘要模式并打 ⚠degraded 标记。
     """
     max_docs = DEPTH_MAX_DOCS[settings.research_depth]
     tavily = TavilySearch(max_results=8)
-    embedder = get_embedder_cached(settings)
     blocked = {d.strip() for d in settings.fetch_block_domains.split(",") if d.strip()}
 
     def _search(query: str) -> list[dict]:
@@ -139,8 +139,6 @@ def make_research_one(llm: ChatOpenAI, settings: Settings):
         if not snippets:
             return {"findings": [f"### 子问题：{question}\n\n⚠degraded：搜索源全部失败，未取得证据。"]}
 
-        pool = EvidencePool()
-        pool.bind_embedder(embedder)
         degraded = 0
         if max_docs > 0:
             urls = [
@@ -215,13 +213,19 @@ def make_writer(llm: ChatOpenAI):
 def make_archive(store: NotesStore, reports_dir: str | Path = "data/reports"):
     def archive(state: dict) -> dict:
         report = state.get("report", "")
+        annotated = state.get("annotated_report", report)
+        verification = state.get("verification", {})
         store.merge(state["topic"], "\n\n".join(state.get("findings", [])), report=report or None)
-        # 报告单独落一份 Markdown，方便直接翻文件
+        # 双版本落盘：clean 给用户，annotated（含 ⚠️ 标记与幻觉率）供核查
         if report:
             rdir = Path(reports_dir)
             rdir.mkdir(parents=True, exist_ok=True)
-            fname = time.strftime("%Y%m%d_%H%M%S") + ".md"
-            (rdir / fname).write_text(f"# {state['topic']}\n\n{report}", encoding="utf-8")
+            ts = time.strftime("%Y%m%d_%H%M%S")
+            (rdir / f"{ts}.md").write_text(f"# {state['topic']}\n\n{report}", encoding="utf-8")
+            hr = verification.get("hallucination_rate")
+            score = verification.get("score")
+            head = f"# {state['topic']}（标注版）\n\n- 幻觉率：{hr}\n- 可信度评分：{score}\n\n"
+            (rdir / f"{ts}_annotated.md").write_text(head + annotated, encoding="utf-8")
         return {"saved": True}
 
     return archive

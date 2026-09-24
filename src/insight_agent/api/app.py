@@ -34,6 +34,7 @@ NODE_LABELS = {
     "research_one": "并行联网取证",
     "compress": "压缩证据笔记",
     "writer": "撰写结构化报告",
+    "verify": "逐句核验可信度",
     "archive": "归档到笔记库",
 }
 
