@@ -14,10 +14,13 @@ dependencies = [
     "langchain-core>=1.6.4",
     "langchain-openai>=1.6.6",
     "langchain-tavily>=0.2.18",
+    "langfuse>=4.15.6",
     "langgraph>=1.2.12",
+    "mcp>=2.2.0",
     "python-dotenv>=1.2.3",
     "tavily-python>=0.8.4",
     "trafilatura>=2.2.0",
+    "typer>=0.27.2",
     "uvicorn[standard]>=0.53.0",
 ]
 
