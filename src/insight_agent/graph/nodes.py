@@ -8,6 +8,7 @@
   archive  新证据写回笔记库
 """
 
+import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -60,11 +61,49 @@ class ResearchBrief(BaseModel):
     sub_questions: list[str] = Field(description="需要补充研究的子问题；已充分覆盖时返回空数组")
 
 
-def make_recall(store: NotesStore):
+class GapJudgement(BaseModel):
+    sufficient: bool = Field(description="现有证据是否足以支撑高质量报告")
+    missing_aspects: list[str] = Field(description="不足时需要补充研究的具体子问题（至多 3 个）")
+
+
+def make_gap_analyzer(llm: ChatOpenAI, settings: Settings):
+    """迭代深研（UPGRADE_SPEC §10）：评估证据充分度，不足则再派一轮研究。
+
+    仅 deep 档启用；MAX_RESEARCH_ROUNDS 是代码不变量，防止长周期失控。
+    """
+    max_rounds = 3 if settings.research_depth == "deep" else 1
+
+    def gap_analyzer(state: dict) -> dict:
+        rounds = state.get("rounds", 1)
+        if settings.research_depth != "deep" or rounds >= max_rounds:
+            return {"rounds": rounds, "brief": []}
+        judgement = llm.with_structured_output(GapJudgement).invoke(
+            f"研究主题：{state['topic']}\n"
+            f"研究提纲：{json.dumps(state.get('brief', []), ensure_ascii=False)}\n"
+            f"已收集证据（节选）：\n{state.get('compressed_findings', '')[:4000]}\n\n"
+            "判断证据是否足以写出高质量报告；不足则列出至多 3 个需要补充的具体子问题。"
+        )
+        if judgement.sufficient or not judgement.missing_aspects:
+            return {"rounds": rounds, "brief": []}
+        return {"rounds": rounds + 1, "brief": judgement.missing_aspects[:3]}
+
+    return gap_analyzer
+
+
+def make_recall(store: NotesStore, card_store=None):
+    """双通道记忆（规格 §9.3）：主题档案（精确） + 事实卡片（跨主题语义）。"""
+
     def recall(state: dict) -> dict:
+        fact_cards: list[str] = []
+        if card_store is not None:
+            cards = card_store.search(state["topic"], top_k=5)
+            fact_cards = [
+                f"{c.claim}（[来源]({c.source_url})，置信 {c.confidence}）" for c in cards
+            ]
         return {
             "existing_notes": store.load_notes(state["topic"]),
             "existing_digest": store.load_digest(state["topic"]),
+            "fact_cards": fact_cards,
         }
 
     return recall
@@ -75,6 +114,13 @@ def make_planner(llm: ChatOpenAI):
 
     def planner(state: dict) -> dict:
         digest = state.get("existing_digest", "")
+        cards = state.get("fact_cards", [])
+        card_hint = (
+            "\n相关历史事实（跨主题语义记忆召回，注意与提纲去重）：\n"
+            + "\n".join(f"- {c}" for c in cards)
+            if cards
+            else ""
+        )
         base_prompt = (
             f"研究主题：{state['topic']}\n"
             + (
@@ -84,6 +130,7 @@ def make_planner(llm: ChatOpenAI):
                 if digest
                 else ""
             )
+            + card_hint
             + "拆解成 3-5 个具体、可搜索的子问题，覆盖现状、关键玩家、近期动态、风险。"
         )
         # 模型偶发不守"至少 3 条"的规矩 → 带反馈重试一次（代码拥有不变量）

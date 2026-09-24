@@ -42,6 +42,7 @@ class Claim:
     verdict: Literal["supported", "partial", "unsupported", "not_checkable"]
     evidence: list[dict] = field(default_factory=list)  # [{url}]
     reason: str = ""
+    quote: str = ""
 
 
 @dataclass
@@ -99,8 +100,12 @@ def _annotate(report: str, claims: list[Claim]) -> str:
     return report
 
 
-def make_verify_node(llm, verify_enabled: bool, max_claims: int, concurrency: int, pool):
-    """verify 节点工厂。pool 为跨节点共享的 EvidencePool（research_one 写入，verify 读取）。"""
+def make_verify_node(llm, verify_enabled: bool, max_claims: int, concurrency: int, pool, card_store=None):
+    """verify 节点工厂。pool 为跨节点共享的 EvidencePool（research_one 写入，verify 读取）。
+
+    card_store 非空时：supported/partial 的 claim 自动转为 FactCard 入长期记忆
+    （B→C 架构联动：验证层是记忆层的质检关，规格 §9.3）。
+    """
 
     def verify(state: dict) -> dict:
         report = state.get("report", "")
@@ -124,7 +129,11 @@ def make_verify_node(llm, verify_enabled: bool, max_claims: int, concurrency: in
                     f"陈述：{text}\n\n证据段落：\n{context}"
                 )
                 verdict = v.verdict if v.verdict in ("supported", "partial", "unsupported", "not_checkable") else "not_checkable"
-                return Claim(text, verdict, [{"url": p.url} for p in passages[:2]], v.reason)
+                return Claim(
+                    text, verdict,
+                    [{"url": p.url} for p in passages[:2]],
+                    v.reason, quote=v.quote,
+                )
             except Exception as e:  # noqa: BLE001 - 单条失败不拖垮整批
                 return Claim(text, "not_checkable", [], f"判定异常：{type(e).__name__}")
 
@@ -132,6 +141,23 @@ def make_verify_node(llm, verify_enabled: bool, max_claims: int, concurrency: in
             claims = list(ex.map(check, claim_texts))
 
         vr = VerificationReport(claims=claims)
+
+        # B→C 联动：核对通过的事实进长期记忆（事实卡片）
+        if card_store is not None:
+            from insight_agent.memory.fact_cards import FactCard
+
+            for c in claims:
+                if c.verdict in ("supported", "partial") and c.evidence:
+                    card_store.add(
+                        FactCard(
+                            claim=c.text,
+                            source_url=c.evidence[0].get("url", ""),
+                            source_quote=c.quote,
+                            topic=state.get("topic", ""),
+                            confidence=1.0 if c.verdict == "supported" else 0.6,
+                        )
+                    )
+
         return {"verification": vr.to_dict(), "annotated_report": _annotate(report, claims)}
 
     return verify
