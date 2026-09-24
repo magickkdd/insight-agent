@@ -22,7 +22,8 @@ def run_once(graph, label: str) -> None:
     print(f"提纲条数（增量研究量）：{len(result['brief'])}")
     for q in result["brief"]:
         print(f"  · {q}")
-    print(f"新证据长度：{len(result.get('findings', '')) or 0} 字")
+    new_chars = sum(len(f) for f in result.get("findings", []))
+    print(f"新证据长度：{new_chars} 字")
     print(f"耗时：{elapsed:.1f}s，写回笔记库：{result['saved']}\n")
 
 

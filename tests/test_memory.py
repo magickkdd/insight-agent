@@ -26,5 +26,5 @@ def test_slug_stable_and_distinct(tmp_path):
 def test_compress_passthrough_without_llm():
     """短证据直接旁路，不触发 LLM 调用 —— llm 传 None 也不该报错。"""
     node = make_compress(None)
-    out = node({"findings": "短证据"})
-    assert out["compressed_findings"] == "短证据"
+    out = node({"findings": ["短证据A", "短证据B"]})
+    assert out["compressed_findings"] == "短证据A\n\n短证据B"

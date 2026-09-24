@@ -28,8 +28,9 @@ def main() -> None:
     for i, q in enumerate(result["brief"], 1):
         print(f"{i}. {q}")
 
-    print(f"\n=== 证据笔记（researcher，{len(result['findings'])} 字）===")
-    print(result["findings"][:500] + "\n……")
+    notes = "\n\n".join(result["findings"])
+    print(f"\n=== 证据笔记（researcher，{len(notes)} 字）===")
+    print(notes[:500] + "\n……")
 
     print("\n=== 最终报告（writer）===")
     print(result["report"])

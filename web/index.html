@@ -91,20 +91,28 @@ function run() {
   const es = new EventSource('/api/research/stream?topic=' + encodeURIComponent(topic));
   es.addEventListener('stage', e => {
     const d = JSON.parse(e.data);
+    if (d.node === 'planner' && d.brief) { window.briefTotal = d.brief.length; window.briefDone = 0; }
+    if (d.node === 'research_one') window.briefDone = (window.briefDone || 0) + 1;
     let el = document.querySelector('.stage[data-node="' + d.node + '"]');
-    if (!el) {
-      el = addStage(d.label, true);
-      el.dataset.node = d.node; el.dataset.label = d.label;
-    }
-    finishStage(d.node);
-    if (d.node === 'planner' && d.brief) {
-      const b = document.createElement('div');
-      b.className = 'brief';
-      b.textContent = '提纲：' + d.brief.join(' ｜ ');
-      $('stages').appendChild(b);
-    }
-    if (d.node === 'researcher' && d.chars) {
-      el.querySelector('span:last-child').textContent += '（' + d.chars + ' 字证据）';
+    if (!el) { el = addStage(d.label, true); el.dataset.node = d.node; el.dataset.label = d.label; }
+    const parallelDone = d.node === 'research_one' && window.briefTotal;
+    if (parallelDone) {
+      el.querySelector('span:last-child').textContent =
+        d.label + '（' + window.briefDone + '/' + window.briefTotal + '）'
+        + (d.chars ? '（' + d.chars + ' 字）' : '')
+        + (window.briefDone < window.briefTotal ? ' …' : '');
+      if (window.briefDone >= window.briefTotal) finishStage(d.node);
+    } else {
+      finishStage(d.node);
+      if (d.node === 'planner' && d.brief) {
+        const b = document.createElement('div');
+        b.className = 'brief';
+        b.textContent = '提纲：' + d.brief.join(' ｜ ');
+        $('stages').appendChild(b);
+      }
+      if (d.node === 'writer' && d.chars) {
+        el.querySelector('span:last-child').textContent += '（' + d.chars + ' 字）';
+      }
     }
   });
   es.addEventListener('report', e => {

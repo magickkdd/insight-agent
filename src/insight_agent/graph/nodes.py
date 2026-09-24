@@ -8,6 +8,9 @@
   archive  新证据写回笔记库
 """
 
+import time
+from pathlib import Path
+
 from pydantic import BaseModel, Field
 
 from langchain.agents import create_agent
@@ -91,31 +94,35 @@ def make_planner(llm: ChatOpenAI):
     return planner
 
 
-def make_researcher(llm: ChatOpenAI):
+def make_research_one(llm: ChatOpenAI):
+    """单问题研究员：并行 fan-out 的"工人"。
+
+    每个实例只研究一个子问题（接收 {"question": str}），
+    多个实例由 Send 并行拉起 —— 串行 4×30s 变并行 ~30s。
+    """
     agent = create_agent(
         llm,
         tools=[TavilySearch(max_results=5)],
         system_prompt=RESEARCHER_SYSTEM,
     )
 
-    def researcher(state: dict) -> dict:
-        questions = "\n".join(f"{i}. {q}" for i, q in enumerate(state["brief"], 1))
+    def research_one(state: dict) -> dict:
         result = agent.invoke(
-            {"messages": [("user", f"本轮增量研究提纲：\n{questions}\n请逐条取证并汇总成证据笔记。")]},
-            config={"recursion_limit": 45},
+            {"messages": [("user", f"研究子问题：{state['question']}\n请取证并汇总成证据笔记。")]},
+            config={"recursion_limit": 30},
         )
-        return {"findings": result["messages"][-1].content}
+        return {"findings": [f"### 子问题：{state['question']}\n\n{result['messages'][-1].content}"]}
 
-    return researcher
+    return research_one
 
 
 def make_compress(llm: ChatOpenAI):
     def compress(state: dict) -> dict:
-        findings = state["findings"]
-        if len(findings) <= COMPRESS_THRESHOLD:
-            return {"compressed_findings": findings}  # 不超限直接过，省一次调用
+        joined = "\n\n".join(state["findings"])  # 并行证据汇聚成一份
+        if len(joined) <= COMPRESS_THRESHOLD:
+            return {"compressed_findings": joined}  # 不超限直接过，省一次调用
         result = llm.invoke(
-            [("system", COMPRESS_SYSTEM), ("user", findings)]
+            [("system", COMPRESS_SYSTEM), ("user", joined)]
         )
         return {"compressed_findings": result.content}
 
@@ -137,9 +144,16 @@ def make_writer(llm: ChatOpenAI):
     return writer
 
 
-def make_archive(store: NotesStore):
+def make_archive(store: NotesStore, reports_dir: str | Path = "data/reports"):
     def archive(state: dict) -> dict:
-        store.merge(state["topic"], state["findings"])
+        report = state.get("report", "")
+        store.merge(state["topic"], "\n\n".join(state.get("findings", [])), report=report or None)
+        # 报告单独落一份 Markdown，方便直接翻文件
+        if report:
+            rdir = Path(reports_dir)
+            rdir.mkdir(parents=True, exist_ok=True)
+            fname = time.strftime("%Y%m%d_%H%M%S") + ".md"
+            (rdir / fname).write_text(f"# {state['topic']}\n\n{report}", encoding="utf-8")
         return {"saved": True}
 
     return archive

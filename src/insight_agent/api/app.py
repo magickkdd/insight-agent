@@ -31,7 +31,7 @@ graph = build_research_graph(llm, notes_store=NotesStore())
 NODE_LABELS = {
     "recall": "检索历史研究档案",
     "planner": "规划研究提纲",
-    "researcher": "联网搜索取证",
+    "research_one": "并行联网取证",
     "compress": "压缩证据笔记",
     "writer": "撰写结构化报告",
     "archive": "归档到笔记库",
@@ -63,8 +63,8 @@ async def research_stream(topic: str = Query(min_length=2, max_length=200)):
                     payload = {"node": node, "label": NODE_LABELS.get(node, node)}
                     if node == "planner":
                         payload["brief"] = delta.get("brief", [])
-                    if node == "researcher":
-                        payload["chars"] = len(delta.get("findings", ""))
+                    if node == "research_one":
+                        payload["chars"] = sum(len(f) for f in delta.get("findings", []))
                     if node == "writer":
                         report = delta.get("report", "")
                         payload["chars"] = len(report)

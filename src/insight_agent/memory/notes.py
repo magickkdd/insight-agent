@@ -48,8 +48,8 @@ class NotesStore:
         headings = [ln.strip() for ln in notes.splitlines() if ln.strip().startswith("#")]
         return "\n".join(headings) if headings else notes[:500]
 
-    def merge(self, topic: str, new_findings: str) -> None:
-        """把本轮证据合并进档案（原子写入）。"""
+    def merge(self, topic: str, new_findings: str, report: str | None = None) -> None:
+        """把本轮证据（和可选的最终报告）合并进档案（原子写入）。"""
         p = self._path(topic)
         doc = (
             json.loads(p.read_text(encoding="utf-8"))
@@ -61,6 +61,11 @@ class NotesStore:
         else:
             doc["notes"] = new_findings
         doc["updates"].append({"at": time.strftime("%Y-%m-%d %H:%M"), "chars": len(new_findings)})
+        if report is not None:
+            doc.setdefault("reports", []).append(
+                {"at": time.strftime("%Y-%m-%d %H:%M"), "chars": len(report)}
+            )
+            doc["last_report"] = report
 
         tmp = p.with_suffix(".tmp")
         tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
