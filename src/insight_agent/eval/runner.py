@@ -95,7 +95,7 @@ def _invoke_case(case: EvalCase, settings, store_root: Path, handler) -> tuple[s
         )
         return out["report"], [], summarize_tokens(handler)
     # e2e：全流水线
-    graph = build_research_graph(llm, notes_store=NotesStore(store_root / "e2e_notes"))
+    graph = build_research_graph(llm, notes_store=NotesStore(store_root / "e2e_notes"), settings=settings)
     result = graph.invoke({"topic": case.topic}, config={"callbacks": [handler]})
     return result["report"], result["brief"], summarize_tokens(handler)
 

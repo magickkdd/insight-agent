@@ -26,7 +26,7 @@ llm = ChatOpenAI(
     base_url=settings.llm_base_url,
     temperature=0,
 )
-graph = build_research_graph(llm, notes_store=NotesStore())
+graph = build_research_graph(llm, notes_store=NotesStore(), settings=settings)
 
 NODE_LABELS = {
     "recall": "检索历史研究档案",

@@ -14,6 +14,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Send
 
+from insight_agent.config import Settings
 from insight_agent.graph.nodes import (
     make_archive,
     make_compress,
@@ -35,13 +36,18 @@ def route_after_planner(state: dict):
 
 
 def build_research_graph(
-    llm: ChatOpenAI, notes_store: NotesStore | None = None
+    llm: ChatOpenAI,
+    notes_store: NotesStore | None = None,
+    settings: Settings | None = None,
 ) -> CompiledStateGraph:
+    from insight_agent.config import load_settings
+
     store = notes_store or NotesStore()
+    cfg = settings or load_settings()
     builder = StateGraph(ResearchState)
     builder.add_node("recall", make_recall(store))
     builder.add_node("planner", make_planner(llm))
-    builder.add_node("research_one", make_research_one(llm))
+    builder.add_node("research_one", make_research_one(llm, cfg))
     builder.add_node("compress", make_compress(llm))
     builder.add_node("writer", make_writer(llm))
     builder.add_node("archive", make_archive(store))
