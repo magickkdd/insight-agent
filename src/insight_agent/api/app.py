@@ -17,15 +17,11 @@ from langchain_openai import ChatOpenAI
 
 from insight_agent.config import load_settings
 from insight_agent.graph.build import build_research_graph
+from insight_agent.graph.llm_factory import get_llm
 from insight_agent.memory.notes import NotesStore
 
 settings = load_settings()
-llm = ChatOpenAI(
-    model=settings.llm_model,
-    api_key=settings.llm_api_key,
-    base_url=settings.llm_base_url,
-    temperature=0,
-)
+llm = get_llm("main", settings)
 graph = build_research_graph(llm, notes_store=NotesStore(), settings=settings)
 
 NODE_LABELS = {

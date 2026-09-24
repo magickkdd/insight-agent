@@ -24,6 +24,15 @@ class Settings:
     verify_max_claims: int = 30
     verify_concurrency: int = 4
     bocha_api_key: str = ""               # 博查搜索（国内直连，可选）
+    # ---- 模型档位（规格 §7：cloud | local | hybrid）----
+    llm_profile: str = "cloud"
+    local_base_url: str = "http://localhost:11434/v1"  # Ollama OpenAI 兼容端点
+    local_model: str = "qwen3:8b"
+    # ---- Langfuse 可观测（规格 §8）----
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "http://localhost:3000"
+    langfuse_mask_content: bool = False   # true 时只记元数据不记正文
 
 
 def load_settings(env_path: str = ".env") -> Settings:
@@ -50,4 +59,11 @@ def load_settings(env_path: str = ".env") -> Settings:
         verify_max_claims=int(os.environ.get("VERIFY_MAX_CLAIMS", "30")),
         verify_concurrency=int(os.environ.get("VERIFY_CONCURRENCY", "4")),
         bocha_api_key=os.environ.get("BOCHA_API_KEY", ""),
+        llm_profile=os.environ.get("LLM_PROFILE", "cloud"),
+        local_base_url=os.environ.get("LOCAL_BASE_URL", "http://localhost:11434/v1"),
+        local_model=os.environ.get("LOCAL_MODEL", "qwen3:8b"),
+        langfuse_public_key=os.environ.get("LANGFUSE_PUBLIC_KEY", ""),
+        langfuse_secret_key=os.environ.get("LANGFUSE_SECRET_KEY", ""),
+        langfuse_host=os.environ.get("LANGFUSE_HOST", "http://localhost:3000"),
+        langfuse_mask_content=os.environ.get("LANGFUSE_MASK_CONTENT", "").lower() == "true",
     )

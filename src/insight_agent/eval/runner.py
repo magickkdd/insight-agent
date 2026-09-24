@@ -86,17 +86,12 @@ def _invoke_case(case: EvalCase, settings, store_root: Path, handler) -> tuple[s
     实例回调自动传播到它的所有调用（含 with_structured_output
     和 researcher 子 agent），无需层层穿 config。
     """
+    from insight_agent.graph.llm_factory import get_llm
     from insight_agent.graph.nodes import make_planner, make_writer
     from insight_agent.graph.build import build_research_graph
     from insight_agent.memory.notes import NotesStore
 
-    llm = ChatOpenAI(
-        model=settings.llm_model,
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_base_url,
-        temperature=0,
-        callbacks=[handler],
-    )
+    llm = get_llm("main", settings).bind(callbacks=[handler])
 
     if case.node == "planner":
         out = make_planner(llm)({"topic": case.topic, "existing_digest": case.existing_digest})

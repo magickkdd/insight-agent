@@ -34,7 +34,10 @@ def main() -> None:
     args = parser.parse_args()
 
     s = load_settings()
-    judge_client = OpenAI(api_key=s.llm_api_key, base_url=s.llm_base_url)
+    from insight_agent.graph.llm_factory import get_judge_config
+
+    j_base, j_key, j_model = get_judge_config(s)
+    judge_client = OpenAI(base_url=j_base, api_key=j_key)
 
     cases = load_cases(args.cases)
     if args.tier:
@@ -54,7 +57,7 @@ def main() -> None:
     results = []
     for case in cases:
         print(f"[{case.id}] ", end="", flush=True)
-        r = run_case(case, s, judge_client, s.llm_model, store_root)
+        r = run_case(case, s, judge_client, j_model, store_root)
         results.append(r)
         if r.error_kind == "rate_limit":
             print("ERROR 限流，剩余中止")
