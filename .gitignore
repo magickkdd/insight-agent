@@ -17,3 +17,5 @@ eval/runs/
 .pytest_cache/
 checkpoints.sqlite
 data/
+data/
+d2_out.txt
