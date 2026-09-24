@@ -1,0 +1,264 @@
+# Insight Agent 评测用例集（标准版：12 planner + 10 writer + 8 e2e = 30 条）
+# unit 层：单节点，1-2 次 LLM 调用/条，回归常用
+# e2e 层：全流水线，分钟级/条，按需或夜间跑
+
+# ============ planner 单元层（12 条）============
+
+- id: planner-ai-framework-001
+  tier: unit
+  node: planner
+  topic: "国内 AI Agent 开发框架的最新格局与趋势"
+  expect:
+    sub_questions_min: 3
+    sub_questions_max: 5
+    keywords_any: ["格局", "框架", "趋势", "动态"]
+
+- id: planner-ev-market-002
+  tier: unit
+  node: planner
+  topic: "2026 年新能源汽车市场的价格竞争态势"
+  expect:
+    sub_questions_min: 3
+    sub_questions_max: 5
+    keywords_any: ["价格", "竞争", "市场", "销量"]
+
+- id: planner-chip-industry-003
+  tier: unit
+  node: planner
+  topic: "半导体先进制程的国内外差距与追赶路径"
+  expect:
+    sub_questions_min: 3
+    sub_questions_max: 5
+
+- id: planner-coffee-chain-004
+  tier: unit
+  node: planner
+  topic: "连锁咖啡品牌的闭店潮与下沉市场策略"
+  expect:
+    sub_questions_min: 3
+    sub_questions_max: 5
+    keywords_any: ["闭店", "下沉", "竞争", "策略"]
+
+- id: planner-lowalt-econ-005
+  tier: unit
+  node: planner
+  topic: "低空经济的政策进展与商业化落地"
+  expect:
+    sub_questions_min: 3
+    sub_questions_max: 5
+
+- id: planner-silver-econ-006
+  tier: unit
+  node: planner
+  topic: "银发经济的市场规模与创业机会"
+  expect:
+    sub_questions_min: 3
+    sub_questions_max: 5
+
+- id: planner-saas-outbound-007
+  tier: unit
+  node: planner
+  topic: "中国 SaaS 企业出海的模式与挑战"
+  expect:
+    sub_questions_min: 3
+    sub_questions_max: 5
+
+- id: planner-shortdrama-008
+  tier: unit
+  node: planner
+  topic: "短剧出海的市场格局与盈利模式"
+  expect:
+    sub_questions_min: 3
+    sub_questions_max: 5
+
+- id: planner-pv-industry-009
+  tier: unit
+  node: planner
+  topic: "光伏产业的产能过剩与出清进程"
+  expect:
+    sub_questions_min: 3
+    sub_questions_max: 5
+
+- id: planner-robotics-010
+  tier: unit
+  node: planner
+  topic: "人形机器人量产元年的技术瓶颈与供应链现状"
+  expect:
+    sub_questions_min: 3
+    sub_questions_max: 5
+
+- id: planner-memory-digest-011
+  tier: unit
+  node: planner
+  topic: "国内 AI Agent 开发框架的最新格局与趋势"
+  existing_digest: "# AI Agent技术研究报告\n## 一、2024-2025年国内主流框架技术架构对比\n### 1.1 百度文心智能体\n### 1.2 阿里云百炼\n## 二、开源框架生态\n## 三、关键能力突破：工具调用/多模态/长期记忆/自主规划\n## 四、商业化与产品迭代\n## 五、风险与挑战：幻觉、数据安全、成本"
+  expect:
+    sub_questions_max: 5   # 有档案时：允许少量真增量，不许重新全量铺开
+    keywords_any: ["增量", "最新", "协议", "落地", "私有化", "2026", "2025"]
+
+- id: planner-vague-topic-012
+  tier: unit
+  node: planner
+  topic: "人工智能"
+  expect:
+    sub_questions_min: 3   # 模糊主题也要能收敛出可搜索的子问题
+    sub_questions_max: 5
+
+# ============ writer 单元层（10 条）============
+
+- id: writer-ev-report-001
+  tier: unit
+  node: writer
+  topic: "2026 年新能源汽车市场价格战"
+  evidence: "2026年1月，比亚迪多款冠军版车型降价2-4万元 [来源1](https://example.com/ev1)。吉利银河系列跟进推出限时一口价 [来源2](https://example.com/ev2)。乘联会数据显示1月新能源乘用车零售同比增长12%，但单车均价下探至15.8万元 [来源3](https://example.com/ev3)。行业内人士认为价格战将持续至2026年中 [来源1](https://example.com/ev1)。"
+  expect:
+    contains_all: ["## 核心发现", "## 详细分析", "## 风险与局限"]
+    min_links: 2
+  judge: "报告是否严格基于证据笔记中的事实，没有编造证据之外的数据或来源？"
+
+- id: writer-chip-report-002
+  tier: unit
+  node: writer
+  topic: "半导体先进制程竞争"
+  evidence: "台积电2nm量产计划于2026年下半年启动 [来源A](https://example.com/chip1)。三星SF2良率据报仍低于60% [来源B](https://example.com/chip2)。中芯国际聚焦成熟制程扩产，N+2工艺用于国产AI芯片 [来源C](https://example.com/chip3)。ASML EUV出口管制持续 [来源B](https://example.com/chip2)。"
+  expect:
+    contains_all: ["## 核心发现", "## 风险与局限"]
+    min_links: 2
+  judge: "报告对'未能核实的信息'是否有明确标注？"
+
+- id: writer-coffee-report-003
+  tier: unit
+  node: writer
+  topic: "连锁咖啡闭店潮"
+  evidence: "2025年瑞幸净增门店数首次低于净关闭数（季度口径）的报道出现 [来源1](https://example.com/cf1)。库迪承诺2026年开店目标未达成 [来源2](https://example.com/cf2)。行业专家称单店模型在县域市场跑通率不足40% [来源3](https://example.com/cf3)。"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 2
+  judge: "结论是否有证据支撑，而非泛泛而谈？"
+
+- id: writer-scarce-evidence-004
+  tier: unit
+  node: writer
+  topic: "某小众市场"
+  evidence: "仅有零星信息：该市场2025年规模据传为数亿元级别，无权威统计 [来源1](https://example.com/x1)。"
+  expect:
+    contains_all: ["## 风险与局限"]
+    min_links: 1
+  judge: "面对稀少证据，报告是否诚实标注信息不足而非硬凑结论？"
+
+- id: writer-contradiction-005
+  tier: unit
+  node: writer
+  topic: "某公司业绩争议"
+  evidence: "报道称该公司2025年营收增长30% [来源1](https://example.com/a1)。另一分析称其营收实际下滑5% [来源2](https://example.com/a2)。两者统计口径不同。"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 2
+  judge: "报告是否指出了两个矛盾来源的存在，而不是只取其一？"
+
+- id: writer-no-fabrication-006
+  tier: unit
+  node: writer
+  topic: "低空经济政策"
+  evidence: "2025年民航局发布低空空域管理改革指导意见 [来源1](https://example.com/lv1)。深圳试点eVTOL载人航线 [来源2](https://example.com/lv2)。"
+  expect:
+    contains_all: ["## 核心发现", "## 详细分析"]
+    min_links: 2
+  judge: "报告中出现的每一个数字是否都能在证据笔记中找到？"
+
+- id: writer-long-evidence-007
+  tier: unit
+  node: writer
+  topic: "人形机器人供应链"
+  evidence: "谐波减速器国产化率提升至65% [来源1](https://example.com/r1)。行星滚柱丝杠仍依赖进口，占执行器成本35% [来源2](https://example.com/r2)。六维力传感器价格两年下降70% [来源3](https://example.com/r3)。灵巧手微型电机供应商集中度高 [来源4](https://example.com/r4)。整机BOM成本2026年预计降至15万元内 [来源5](https://example.com/r5)。头部厂商交付量破千台 [来源6](https://example.com/r6)。"
+  expect:
+    contains_all: ["## 核心发现", "## 详细分析"]
+    min_links: 3
+
+- id: writer-format-strict-008
+  tier: unit
+  node: writer
+  topic: "短剧出海"
+  evidence: "ReelShort 2025年海外收入预估超5亿美元 [来源1](https://example.com/s1)。国内短剧制作方转向东南亚本地化制作 [来源2](https://example.com/s2)。买量成本占收入比高达60% [来源3](https://example.com/s3)。"
+  expect:
+    contains_all: ["# 短剧出海", "## 核心发现", "## 风险与局限"]
+    min_links: 2
+
+- id: writer-neutral-tone-009
+  tier: unit
+  node: writer
+  topic: "某争议性行业事件"
+  evidence: "监管部门对行业内数据收集行为立案调查 [来源1](https://example.com/n1)。涉事企业否认违规 [来源2](https://example.com/n2)。第三方专家意见分歧较大 [来源3](https://example.com/n3)。"
+  expect:
+    contains_all: ["## 核心发现"]
+  judge: "报告是否保持中立立场，未预设立场或替任何一方背书？"
+
+- id: writer-combined-notes-010
+  tier: unit
+  node: writer
+  topic: "跨境电商趋势"
+  evidence: "## 本轮新证据\n\nTemu 2026年上半年 GMV 同比增长40% [来源1](https://example.com/t1)。SHEIN 推出平台化转型 [来源2](https://example.com/t2)。美国小额包裹免税政策取消影响显著 [来源3](https://example.com/t3)。"
+  expect:
+    contains_all: ["## 核心发现", "## 详细分析"]
+    min_links: 2
+
+# ============ e2e 全流水线（8 条）============
+
+- id: e2e-ai-cli-tools-001
+  tier: e2e
+  topic: "国产 AI 编程 CLI 工具的最新对比"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 3
+    max_latency_s: 600
+  judge: "报告是否覆盖了至少两个具体产品并有来源支撑？"
+
+- id: e2e-tavily-alternatives-002
+  tier: e2e
+  topic: "面向开发者的网络搜索 API 服务对比"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 3
+
+- id: e2e-ev-price-war-003
+  tier: e2e
+  topic: "新能源汽车价格战的最新动态"
+  expect:
+    contains_all: ["## 核心发现", "## 风险与局限"]
+    min_links: 3
+    max_latency_s: 600
+
+- id: e2e-llm-memory-004
+  tier: e2e
+  topic: "大模型记忆系统产品的最新进展"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 2
+
+- id: e2e-mcp-ecosystem-005
+  tier: e2e
+  topic: "MCP 协议生态的最新发展"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 2
+
+- id: e2e-humanoid-robot-006
+  tier: e2e
+  topic: "人形机器人最新量产与融资动态"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 2
+
+- id: e2e-vlm-agents-007
+  tier: e2e
+  topic: "视觉语言模型在智能体中的最新应用"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 2
+
+- id: e2e-industrial-ai-008
+  tier: e2e
+  topic: "AI 在工业软件领域的落地案例"
+  expect:
+    contains_all: ["## 核心发现"]
+    min_links: 2

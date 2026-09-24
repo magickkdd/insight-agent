@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Insight Agent · 行业洞察研究助手</title>
+<style>
+  :root { --bg:#f6f7f6; --card:#fff; --border:#e3e6e3; --text:#222; --muted:#777; --brand:#188a52; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1b1f1d; --card:#242a26; --border:#3a443e; --text:#e8ece9; --muted:#9aa69e; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { font-size: 22px; margin: 8px 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .bar { display:flex; gap:8px; }
+  input { flex:1; padding: 12px 14px; border:1px solid var(--border); border-radius:10px; font-size:14px; background:var(--card); color:var(--text); }
+  button { padding: 12px 22px; border:0; border-radius:10px; background:var(--brand); color:#fff; font-size:14px; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  #stages { margin-top: 20px; }
+  .stage { display:flex; align-items:center; gap:10px; padding:9px 14px; background:var(--card); border:1px solid var(--border); border-radius:10px; margin-bottom:8px; font-size:14px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); }
+  .dot.done { background: var(--brand); }
+  .spin { width:14px; height:14px; border:2px solid var(--border); border-top-color: var(--brand); border-radius:50%; animation: r 0.8s linear infinite; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  .brief { padding: 8px 14px; color: var(--muted); font-size: 13px; }
+  #report { margin-top: 20px; background: var(--card); border:1px solid var(--border); border-radius:12px; padding: 8px 20px; white-space: pre-wrap; line-height: 1.75; font-size: 14px; }
+  #report a { color: var(--brand); }
+  #err { color:#c0392b; margin-top:14px; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Insight Agent</h1>
+  <div class="sub">行业洞察研究助手 · 规划 → 联网取证 → 结构化报告（全程可观测）</div>
+  <div class="bar">
+    <input id="topic" placeholder="输入研究主题，例如：低空经济的政策进展与商业化落地">
+    <button id="go">开始研究</button>
+  </div>
+  <div id="stages"></div>
+  <div id="err"></div>
+  <div id="report"></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+let running = false;
+
+function addStage(label, runningNow) {
+  const div = document.createElement('div');
+  div.className = 'stage';
+  div.innerHTML = runningNow
+    ? '<div class="spin"></div><span>' + label + ' …</span>'
+    : '<div class="dot done"></div><span>' + label + '</span>';
+  $('stages').appendChild(div);
+  return div;
+}
+
+function finishStage(node) {
+  const stages = [...document.querySelectorAll('.stage')];
+  for (const s of stages) {
+    if (s.dataset.node === node && s.querySelector('.spin')) {
+      s.innerHTML = '<div class="dot done"></div><span>' + s.dataset.label + '</span>';
+    }
+  }
+}
+
+function renderMd(md) {
+  // 极简渲染：标题/加粗/链接，其余按段落 —— 演示够用，不引第三方库
+  const esc = md.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  return esc.split(/\n/).map(line => {
+    if (line.startsWith('# ')) return '<h2>' + line.slice(2) + '</h2>';
+    if (line.startsWith('## ')) return '<h3>' + line.slice(3) + '</h3>';
+    if (line.startsWith('### ')) return '<h4>' + line.slice(4) + '</h4>';
+    let t = line.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+                .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+    return t.trim() === '' ? '' : '<p>' + t + '</p>';
+  }).join('');
+}
+
+$('go').onclick = run;
+$('topic').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+
+function run() {
+  if (running) return;
+  const topic = $('topic').value.trim();
+  if (!topic) { $('err').textContent = '请输入研究主题'; return; }
+  $('err').textContent = ''; $('stages').innerHTML = ''; $('report').innerHTML = '';
+  running = true; $('go').disabled = true;
+
+  const es = new EventSource('/api/research/stream?topic=' + encodeURIComponent(topic));
+  es.addEventListener('stage', e => {
+    const d = JSON.parse(e.data);
+    let el = document.querySelector('.stage[data-node="' + d.node + '"]');
+    if (!el) {
+      el = addStage(d.label, true);
+      el.dataset.node = d.node; el.dataset.label = d.label;
+    }
+    finishStage(d.node);
+    if (d.node === 'planner' && d.brief) {
+      const b = document.createElement('div');
+      b.className = 'brief';
+      b.textContent = '提纲：' + d.brief.join(' ｜ ');
+      $('stages').appendChild(b);
+    }
+    if (d.node === 'researcher' && d.chars) {
+      el.querySelector('span:last-child').textContent += '（' + d.chars + ' 字证据）';
+    }
+  });
+  es.addEventListener('report', e => {
+    $('report').innerHTML = renderMd(JSON.parse(e.data).markdown);
+    es.close(); running = false; $('go').disabled = false;
+  });
+  es.addEventListener('error', e => {
+    if (e.data) { const d = JSON.parse(e.data); $('err').textContent = '出错：' + d.message; }
+    es.close(); running = false; $('go').disabled = false;
+  });
+}
+</script>
+</body>
+</html>
