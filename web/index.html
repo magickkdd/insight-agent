@@ -5,84 +5,144 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Insight Agent · 行业洞察研究助手</title>
 <style>
-  :root { --bg:#f6f7f6; --card:#fff; --border:#e3e6e3; --text:#222; --muted:#777; --brand:#188a52; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#1b1f1d; --card:#242a26; --border:#3a443e; --text:#e8ece9; --muted:#9aa69e; }
+  :root {
+    --bg:#0a0d12; --panel:#11151d; --panel2:#161c26; --border:#232b3a; --border2:#31405c;
+    --text:#e8ecf3; --muted:#8a94a8;
+    --brand:#10b981; --brand2:#06b6d4;
+    --grad:linear-gradient(135deg,#10b981,#06b6d4);
+    --shadow:0 10px 40px rgba(0,0,0,.4);
   }
-  * { box-sizing: border-box; }
-  body { margin:0; font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); }
-  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 60px; }
-  h1 { font-size: 22px; margin: 8px 0 4px; }
-  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
-  .bar { display:flex; gap:8px; }
-  input { flex:1; padding: 12px 14px; border:1px solid var(--border); border-radius:10px; font-size:14px; background:var(--card); color:var(--text); }
-  button { padding: 12px 22px; border:0; border-radius:10px; background:var(--brand); color:#fff; font-size:14px; cursor:pointer; }
-  button:disabled { opacity:.5; cursor:default; }
-  #stages { margin-top: 20px; }
-  .stage { display:flex; align-items:center; gap:10px; padding:9px 14px; background:var(--card); border:1px solid var(--border); border-radius:10px; margin-bottom:8px; font-size:14px; }
-  .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); }
-  .dot.done { background: var(--brand); }
-  .spin { width:14px; height:14px; border:2px solid var(--border); border-top-color: var(--brand); border-radius:50%; animation: r 0.8s linear infinite; }
-  @keyframes r { to { transform: rotate(360deg); } }
-  .brief { padding: 0 14px 8px 26px; color: var(--muted); font-size: 13px; line-height: 1.6; }
-  #report { margin-top: 20px; background: var(--card); border:1px solid var(--border); border-radius:12px; padding: 8px 20px; white-space: pre-wrap; line-height: 1.75; font-size: 14px; }
-  #report a { color: var(--brand); }
-  .drill-tip { color: var(--muted); font-size: 13px; margin: 18px 0 8px; }
-  .drill-btn { display:block; width:100%; text-align:left; margin-bottom:6px; padding:10px 14px; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:10px; font-size:13px; cursor:pointer; }
-  .drill-btn:hover { border-color: var(--brand); }
-  #err { color:#c0392b; margin-top:14px; font-size:13px; }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg:#f4f6f8; --panel:#ffffff; --panel2:#f2f5f7; --border:#e2e7ee; --border2:#c9d4e2;
+      --text:#1a2230; --muted:#67738a; --shadow:0 10px 30px rgba(30,50,80,.08);
+    }
+  }
+  * { box-sizing:border-box; }
+  html { color-scheme: dark light; }
+  body {
+    margin:0; font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.6;
+  }
+  body::before {
+    content:''; position:fixed; inset:0; pointer-events:none;
+    background:
+      radial-gradient(640px 320px at 12% -6%, rgba(16,185,129,.16), transparent 70%),
+      radial-gradient(640px 320px at 88% -6%, rgba(6,182,212,.13), transparent 70%);
+  }
+  .wrap { max-width: 880px; margin:0 auto; padding:28px 18px 80px; position:relative; }
+
+  header { display:flex; align-items:center; gap:12px; margin-bottom:4px; }
+  .mark { width:28px; height:28px; border-radius:9px; background:var(--grad);
+          box-shadow:0 0 20px rgba(16,185,129,.45); flex:none; }
+  h1 { font-size:21px; margin:0; letter-spacing:.3px; }
+  .sub { color:var(--muted); font-size:13px; margin:2px 0 26px 40px; }
+
+  .ask { display:flex; gap:10px; background:var(--panel); border:1px solid var(--border);
+         border-radius:16px; padding:10px; box-shadow:var(--shadow);
+         transition:border-color .25s, box-shadow .25s; }
+  .ask:focus-within { border-color:var(--brand);
+    box-shadow:0 0 0 3px rgba(16,185,129,.15), var(--shadow); }
+  input { flex:1; padding:12px 14px; border:0; outline:0; border-radius:10px;
+          font-size:14.5px; background:transparent; color:var(--text); }
+  input::placeholder { color:var(--muted); }
+  button#go { padding:12px 26px; border:0; border-radius:11px; background:var(--grad);
+    color:#fff; font-size:14px; font-weight:600; cursor:pointer;
+    transition:transform .15s, filter .15s; white-space:nowrap; }
+  button#go:hover:not(:disabled) { filter:brightness(1.12); transform:translateY(-1px); }
+  button#go:disabled { opacity:.45; cursor:default; }
+
+  .mode-chip { display:inline-flex; align-items:center; gap:8px; margin:18px 0 4px;
+    padding:6px 14px; border-radius:999px; background:var(--panel2);
+    border:1px solid var(--border); color:var(--muted); font-size:12.5px; }
+  .mode-chip::before { content:''; width:7px; height:7px; border-radius:50%;
+    background:var(--grad); animation:pulse 1.6s ease infinite; }
+
+  #feed { margin-top:10px; }
+  .stage { position:relative; display:flex; gap:14px; padding:4px 0 20px;
+           animation:rise .35s ease both; }
+  .stage .node { position:relative; width:14px; flex:none; display:flex; justify-content:center; }
+  .stage .node::before { content:''; position:absolute; top:22px; bottom:-4px; width:2px;
+    background:var(--border); border-radius:2px; }
+  .stage:last-of-type .node::before { display:none; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--muted);
+         margin-top:6px; z-index:1; transition:background .3s; }
+  .stage.running .dot { background:var(--brand2); animation:pulse 1.4s ease infinite; }
+  .stage.done .dot { background:var(--brand); box-shadow:0 0 10px rgba(16,185,129,.55); }
+  .stage .name { font-size:14px; font-weight:600; padding-top:2px; }
+  .stage .detail { color:var(--muted); font-size:12.5px; line-height:1.7;
+                   margin-top:5px; white-space:pre-wrap; }
+
+  #report { position:relative; background:var(--panel); border:1px solid var(--border);
+    border-radius:16px; padding:28px 32px 32px; margin-top:26px; box-shadow:var(--shadow);
+    font-size:14px; line-height:1.8; animation:rise .4s ease both; }
+  #report::before { content:''; position:absolute; top:-1px; left:26px; right:26px;
+    height:2px; background:var(--grad); border-radius:2px; }
+  #report h2 { font-size:19px; margin:22px 0 10px; padding-bottom:8px;
+    border-bottom:1px solid var(--border); }
+  #report h2:first-child { margin-top:0; }
+  #report h3 { font-size:16px; margin:18px 0 8px; }
+  #report h4 { font-size:14.5px; margin:14px 0 6px; }
+  #report p { margin:8px 0; }
+  #report a { color:var(--brand2); text-decoration:none; border-bottom:1px dashed var(--border2); }
+  #report a:hover { border-bottom-style:solid; }
+  #report b { color:var(--text); }
+  #report code { font-family:ui-monospace,Consolas,monospace; font-size:12.5px;
+    background:var(--panel2); border:1px solid var(--border); border-radius:5px; padding:1px 6px; }
+  #report pre { background:var(--panel2); border:1px solid var(--border); border-radius:10px;
+    padding:12px 16px; overflow-x:auto; }
+  #report pre code { background:none; border:0; padding:0; }
+  #report blockquote { margin:10px 0; padding:6px 16px; border-left:3px solid var(--brand);
+    background:var(--panel2); border-radius:0 8px 8px 0; color:var(--muted); }
+  #report hr { border:0; border-top:1px solid var(--border); margin:18px 0; }
+  #report ul, #report ol { margin:8px 0; padding-left:24px; }
+  #report li { margin:4px 0; }
+  #report table { border-collapse:collapse; width:100%; margin:14px 0; font-size:13px; }
+  #report th { background:var(--panel2); font-weight:600; text-align:left; }
+  #report th, #report td { border:1px solid var(--border); padding:8px 12px; }
+  #report tbody tr:nth-child(even) { background:rgba(128,140,160,.05); }
+
+  .drill-tip { color:var(--muted); font-size:13px; margin:22px 0 10px; }
+  .drill-btn { display:block; width:100%; text-align:left; margin-bottom:8px;
+    padding:12px 16px; background:var(--panel); color:var(--text);
+    border:1px solid var(--border); border-radius:12px; font-size:13.5px; cursor:pointer;
+    transition:border-color .2s, transform .15s, background .2s; animation:rise .35s ease both; }
+  .drill-btn:hover:not(:disabled) { border-color:var(--brand); background:var(--panel2);
+    transform:translateX(3px); }
+  .drill-btn:disabled { opacity:.5; cursor:default; }
+  .drill-btn .go { color:var(--brand); font-weight:700; margin-right:8px; }
+
+  #err { display:none; color:#ef6a5a; background:rgba(239,106,90,.08);
+    border:1px solid rgba(239,106,90,.3); border-left:3px solid #ef6a5a;
+    border-radius:10px; padding:10px 16px; margin-top:18px; font-size:13px; }
+  #err.show { display:block; animation:rise .3s ease both; }
+
+  @keyframes rise { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:none; } }
+  @keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(6,182,212,.45); }
+                     50% { box-shadow:0 0 0 7px rgba(6,182,212,0); } }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Insight Agent</h1>
-  <div class="sub">行业洞察研究助手 · 规划 → 联网取证 → 结构化报告（全程可观测）</div>
-  <div class="bar">
+  <header>
+    <div class="mark"></div>
+    <h1>Insight Agent</h1>
+  </header>
+  <div class="sub">行业洞察研究助手 · 概览秒出，深入有据 · 全程可观测 · 幻觉率可量化</div>
+
+  <div class="ask">
     <input id="topic" placeholder="输入研究主题，例如：低空经济的政策进展与商业化落地">
     <button id="go">开始研究</button>
   </div>
-  <div id="stages"></div>
+
+  <div id="feed"></div>
   <div id="err"></div>
   <div id="report"></div>
 </div>
+
 <script>
 const $ = (id) => document.getElementById(id);
 let running = false;
-
-function addStage(label, runningNow) {
-  const div = document.createElement('div');
-  div.className = 'stage';
-  div.innerHTML = runningNow
-    ? '<div class="spin"></div><span>' + label + ' …</span>'
-    : '<div class="dot done"></div><span>' + label + '</span>';
-  $('stages').appendChild(div);
-  return div;
-}
-
-function finishStage(node) {
-  const stages = [...document.querySelectorAll('.stage')];
-  for (const s of stages) {
-    if (s.dataset.node === node && s.querySelector('.spin')) {
-      s.innerHTML = '<div class="dot done"></div><span>' + s.dataset.label + '</span>';
-    }
-  }
-}
-
-function renderMd(md) {
-  // 极简渲染：标题/加粗/链接，其余按段落 —— 演示够用，不引第三方库
-  const esc = md.replace(/&/g,'&amp;').replace(/</g,'&lt;');
-  return esc.split(/\n/).map(line => {
-    if (line.startsWith('# ')) return '<h2>' + line.slice(2) + '</h2>';
-    if (line.startsWith('## ')) return '<h3>' + line.slice(3) + '</h3>';
-    if (line.startsWith('### ')) return '<h4>' + line.slice(4) + '</h4>';
-    let t = line.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-                .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-    return t.trim() === '' ? '' : '<p>' + t + '</p>';
-  }).join('');
-}
-
-$('go').onclick = () => run();  // 必须包一层：直接赋值会把 Event 对象当成 focus 参数
-$('topic').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
 
 // 会话标识：localStorage 持久化，同一浏览器的闲聊记忆跨刷新延续
 let SESSION = localStorage.getItem('insight_session');
@@ -94,22 +154,132 @@ if (!SESSION) {
 let lastTopic = '';   // 概览主题（深入请求沿用，避免用户改了输入框导致跑偏）
 let lastBrief = [];   // 概览提纲（深入按钮的数据源）
 
+// ---------- 时间线 ----------
+
+function addStage(label) {
+  const div = document.createElement('div');
+  div.className = 'stage running';
+  div.dataset.node = label.node; div.dataset.label = label.label;
+  div.innerHTML = '<div class="node"><div class="dot"></div></div>'
+    + '<div class="body"><div class="name">' + label.label + ' …</div></div>';
+  $('feed').appendChild(div);
+  return div;
+}
+
+function finishStage(el) {
+  el.classList.remove('running'); el.classList.add('done');
+  const name = el.querySelector('.name');
+  name.textContent = el.dataset.label;
+}
+
+function setDetail(el, text) {
+  let d = el.querySelector('.detail');
+  if (!d) { d = document.createElement('div'); d.className = 'detail';
+            el.querySelector('.body').appendChild(d); }
+  d.textContent = text;
+}
+
+function setMode(text) {
+  $('feed').innerHTML = '<div class="mode-chip">' + text + '</div>';
+}
+
+// ---------- 极简 Markdown 渲染（零依赖）：标题/表格/列表/代码块/引用 ----------
+
+function inlineMd(t) {
+  return t.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+          .replace(/\*([^*]+)\*/g, '<i>$1</i>')
+          .replace(/`([^`]+)`/g, '<code>$1</code>')
+          .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+}
+
+function renderMd(md) {
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const lines = md.replace(/\r/g,'').split('\n');
+  let html = '', i = 0, inCode = false, codeBuf = [], listBuf = [], listType = null;
+  const flushList = () => {
+    if (!listBuf.length) return;
+    html += '<' + listType + '>' + listBuf.map(x => '<li>' + inlineMd(x) + '</li>').join('')
+          + '</' + listType + '>';
+    listBuf = []; listType = null;
+  };
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.trim().startsWith('```')) {           // 围栏代码块
+      flushList();
+      if (!inCode) { inCode = true; codeBuf = []; }
+      else { inCode = false; html += '<pre><code>' + esc(codeBuf.join('\n')) + '</code></pre>'; }
+      i++; continue;
+    }
+    if (inCode) { codeBuf.push(line); i++; continue; }
+    if (/^\s*$/.test(line)) { flushList(); i++; continue; }
+    let m;
+    if ((m = line.match(/^(#{1,4})\s+(.*)$/))) {   // 标题
+      flushList();
+      const lvl = m[1].length;                     // # → h2（报告里 # 是文档标题）
+      const tag = 'h' + Math.min(lvl + 1, 5);
+      html += '<' + tag + '>' + inlineMd(esc(m[2])) + '</' + tag + '>';
+      i++; continue;
+    }
+    if (/^(-{3,}|\*{3,})\s*$/.test(line)) { flushList(); html += '<hr>'; i++; continue; }
+    if (/^>\s?/.test(line)) {                      // 引用块
+      flushList();
+      html += '<blockquote>' + inlineMd(esc(line.replace(/^>\s?/, ''))) + '</blockquote>';
+      i++; continue;
+    }
+    if (/^\|.*\|\s*$/.test(line)) {                // 表格（第二行必须是分隔行）
+      flushList();
+      const rows = [];
+      while (i < lines.length && /^\|.*\|\s*$/.test(lines[i])) { rows.push(lines[i]); i++; }
+      const cells = r => r.split('|').slice(1, -1).map(c => c.trim());
+      if (rows.length >= 2 && /^[\s:|-]+$/.test(rows[1])) {
+        let t = '<table><thead><tr>'
+              + cells(rows[0]).map(c => '<th>' + inlineMd(esc(c)) + '</th>').join('')
+              + '</tr></thead><tbody>';
+        for (const r of rows.slice(2))
+          t += '<tr>' + cells(r).map(c => '<td>' + inlineMd(esc(c)) + '</td>').join('') + '</tr>';
+        html += t + '</tbody></table>';
+      } else {
+        rows.forEach(r => html += '<p>' + inlineMd(esc(r)) + '</p>');
+      }
+      continue;
+    }
+    if ((m = line.match(/^\s*[-*]\s+(.*)$/))) {    // 无序列表
+      if (listType && listType !== 'ul') flushList();
+      listType = 'ul'; listBuf.push(esc(m[1])); i++; continue;
+    }
+    if ((m = line.match(/^\s*\d+[.、)]\s+(.*)$/))) { // 有序列表（含中文顿号）
+      if (listType && listType !== 'ol') flushList();
+      listType = 'ol'; listBuf.push(esc(m[1])); i++; continue;
+    }
+    flushList();
+    html += '<p>' + inlineMd(esc(line)) + '</p>';
+    i++;
+  }
+  flushList();
+  if (inCode) html += '<pre><code>' + esc(codeBuf.join('\n')) + '</code></pre>';
+  return html;
+}
+
+// ---------- 交互主流程 ----------
+
+$('go').onclick = () => run();  // 必须包一层：直接赋值会把 Event 对象当成 focus 参数
+$('topic').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+
 function run(focus) {
   if (running) return;
   const isFocus = !!focus;
   const topic = isFocus ? lastTopic : $('topic').value.trim();
-  if (!topic) { $('err').textContent = '请输入研究主题'; return; }
+  if (!topic) { showError('请输入研究主题'); return; }
   if (!isFocus) { lastTopic = topic; $('report').innerHTML = ''; }
-  $('err').textContent = ''; $('stages').innerHTML = '';
+  $('err').classList.remove('show');
+  $('feed').innerHTML = '';
   const drill = document.getElementById('drill'); if (drill) drill.remove();
   running = true; $('go').disabled = true;
+  document.querySelectorAll('.drill-btn').forEach(b => b.disabled = true);
 
-  const hint = document.createElement('div');
-  hint.className = 'brief';
-  hint.textContent = isFocus
-    ? '深入模式：对该子问题联网深读取证 + 逐句核验，约需 1-2 分钟 …'
-    : '概览模式：基于搜索摘要快速出全景报告 …';
-  $('stages').appendChild(hint);
+  setMode(isFocus
+    ? '深入模式 · 联网深读取证 + 逐句核验，约 1-2 分钟'
+    : '概览模式 · 基于搜索摘要快速出全景报告');
 
   let url = '/api/research/stream?topic=' + encodeURIComponent(topic)
     + '&session_id=' + encodeURIComponent(SESSION)
@@ -125,23 +295,17 @@ function run(focus) {
     }
     if (d.node === 'research_one') window.briefDone = (window.briefDone || 0) + 1;
     let el = document.querySelector('.stage[data-node="' + d.node + '"]');
-    if (!el) { el = addStage(d.label, true); el.dataset.node = d.node; el.dataset.label = d.label; }
+    if (!el) el = addStage(d);
     const parallelDone = d.node === 'research_one' && window.briefTotal;
     if (parallelDone) {
-      el.querySelector('span:last-child').textContent =
+      el.querySelector('.name').textContent =
         d.label + '（' + window.briefDone + '/' + window.briefTotal + '）'
-        + (d.chars ? '（' + d.chars + ' 字）' : '')
+        + (d.chars ? ' · ' + d.chars + ' 字' : '')
         + (window.briefDone < window.briefTotal ? ' …' : '');
-      if (window.briefDone >= window.briefTotal) finishStage(d.node);
+      if (window.briefDone >= window.briefTotal) finishStage(el);
     } else {
-      finishStage(d.node);
-      // 内容输出统一挂卡片下方（与提纲同款样式），标题行只留状态
-      if (d.detail) {
-        const b = document.createElement('div');
-        b.className = 'brief';
-        b.textContent = d.detail;
-        el.after(b);
-      }
+      finishStage(el);
+      if (d.detail) setDetail(el, d.detail);
     }
   });
   es.addEventListener('report', e => {
@@ -155,7 +319,7 @@ function run(focus) {
     es.close(); running = false; $('go').disabled = false;
   });
   es.addEventListener('error', e => {
-    if (e.data) { const d = JSON.parse(e.data); $('err').textContent = '出错：' + d.message; }
+    if (e.data) showError('出错：' + JSON.parse(e.data).message);
     es.close(); running = false; $('go').disabled = false;
   });
 }
@@ -171,11 +335,16 @@ function renderDrill() {
   lastBrief.forEach(q => {
     const b = document.createElement('button');
     b.className = 'drill-btn';
-    b.textContent = q;
+    b.innerHTML = '<span class="go">→</span>' + q;
     b.onclick = () => run(q);
     div.appendChild(b);
   });
   $('report').after(div);
+}
+
+function showError(msg) {
+  const el = $('err');
+  el.textContent = msg; el.classList.add('show');
 }
 </script>
 </body>
