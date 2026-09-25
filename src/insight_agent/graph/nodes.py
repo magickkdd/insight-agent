@@ -11,6 +11,7 @@
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -45,6 +46,8 @@ WRITER_SYSTEM = """你是行业分析师。基于证据笔记撰写结构化报�
 引用纪律（必须遵守）：
 - 每条引用保留完整 markdown 链接：[来源N](url)，例如 [来源1](https://example.com/a)
 - 禁止只写 [来源N] 而丢弃 url —— 丢链接的引用等于无法核查
+时间纪律：用户消息会给出当前日期。"近期/目前"等表述以它为基准；
+报告开头注明数据截止时间，以证据中来源的实际时间为准，不编造。
 铁律：只使用证据笔记中的事实，绝不编造数据和来源。
 """
 
@@ -55,6 +58,12 @@ COMPRESS_SYSTEM = """你是编辑。把下面的研究证据压缩到 3000 字�
 """
 
 COMPRESS_THRESHOLD = 8000  # 超过这个长度的证据才值得花一次压缩调用
+
+
+def _today() -> str:
+    """当前日期注入 prompt：LLM 的时间观冻结在训练数据截止那一刻，
+    不喂日期它嘴里的"最新/近期"就是它记忆里的旧年份。"""
+    return datetime.now().strftime("%Y年%m月%d日")
 
 
 class ResearchBrief(BaseModel):
@@ -183,6 +192,8 @@ def make_planner(llm: ChatOpenAI):
             else ""
         )
         base_prompt = (
+            f"当前日期：{_today()}。涉及时间范围的子问题以这个日期为基准"
+            "（如\"近一年\"\"今年以来\"），不要沿用你训练数据里的旧年份。\n"
             f"研究主题：{state['topic']}\n"
             + (
                 f"\n已有研究档案的目录（覆盖度地图）：\n{digest}\n"
@@ -310,7 +321,13 @@ def make_writer(llm: ChatOpenAI):
             f"{existing}\n\n## 本轮新证据\n\n{fresh}" if existing else fresh
         )
         result = llm.invoke(
-            [("system", WRITER_SYSTEM), ("user", f"主题：{state['topic']}\n\n证据笔记：\n{evidence}")]
+            [
+                ("system", WRITER_SYSTEM),
+                (
+                    "user",
+                    f"主题：{state['topic']}\n当前日期：{_today()}\n\n证据笔记：\n{evidence}",
+                ),
+            ]
         )
         return {"report": result.content}
 
