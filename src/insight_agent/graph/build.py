@@ -18,6 +18,7 @@ from insight_agent.config import Settings
 from insight_agent.graph.nodes import (
     make_archive,
     make_compress,
+    make_gap_analyzer,
     make_planner,
     make_recall,
     make_research_one,
