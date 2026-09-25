@@ -94,7 +94,10 @@ async def research_stream(
                             detail += f" · 召回 {len(cards)} 条相关事实卡"
                         payload["detail"] = detail
                     if node == "planner":
-                        payload["brief"] = delta.get("brief", [])
+                        brief = delta.get("brief", [])
+                        payload["brief"] = brief
+                        if brief:
+                            payload["detail"] = "提纲：" + " ｜ ".join(brief)
                     if node == "research_one":
                         payload["chars"] = sum(len(f) for f in delta.get("findings", []))
                     if node == "compress":

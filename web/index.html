@@ -24,7 +24,7 @@
   .dot.done { background: var(--brand); }
   .spin { width:14px; height:14px; border:2px solid var(--border); border-top-color: var(--brand); border-radius:50%; animation: r 0.8s linear infinite; }
   @keyframes r { to { transform: rotate(360deg); } }
-  .brief { padding: 8px 14px; color: var(--muted); font-size: 13px; }
+  .brief { padding: 0 14px 8px 26px; color: var(--muted); font-size: 13px; line-height: 1.6; }
   #report { margin-top: 20px; background: var(--card); border:1px solid var(--border); border-radius:12px; padding: 8px 20px; white-space: pre-wrap; line-height: 1.75; font-size: 14px; }
   #report a { color: var(--brand); }
   .drill-tip { color: var(--muted); font-size: 13px; margin: 18px 0 8px; }
@@ -135,12 +135,12 @@ function run(focus) {
       if (window.briefDone >= window.briefTotal) finishStage(d.node);
     } else {
       finishStage(d.node);
-      if (d.detail) el.querySelector('span:last-child').textContent += '（' + d.detail + '）';
-      if (d.node === 'planner' && d.brief && !isFocus) {
+      // 内容输出统一挂卡片下方（与提纲同款样式），标题行只留状态
+      if (d.detail) {
         const b = document.createElement('div');
         b.className = 'brief';
-        b.textContent = '提纲：' + d.brief.join(' ｜ ');
-        $('stages').appendChild(b);
+        b.textContent = d.detail;
+        el.after(b);
       }
     }
   });
