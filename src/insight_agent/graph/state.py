@@ -11,6 +11,9 @@ from typing import Annotated, TypedDict
 
 class ResearchState(TypedDict):
     topic: str
+    is_research: bool         # gate：是否为研究请求
+    gate_reason: str          # gate：判定理由
+    direct_reply: str         # smalltalk：闲聊直答（不走流水线）
     existing_notes: str       # recall：笔记库里的历史证据（全文，给 writer）
     existing_digest: str      # recall：档案目录（标题行，给 planner 判断覆盖度）
     brief: list[str]          # planner：增量子问题清单（空 = 已充分覆盖）

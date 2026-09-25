@@ -25,6 +25,8 @@ llm = get_llm("main", settings)
 graph = build_research_graph(llm, notes_store=NotesStore(), settings=settings)
 
 NODE_LABELS = {
+    "gate": "判断研究意图",
+    "smalltalk": "对话回复",
     "recall": "检索历史研究档案",
     "planner": "规划研究提纲",
     "research_one": "并行联网取证",
@@ -58,6 +60,12 @@ async def research_stream(topic: str = Query(min_length=2, max_length=200)):
             async for chunk in graph.astream({"topic": topic}, stream_mode="updates"):
                 for node, delta in chunk.items():
                     payload = {"node": node, "label": NODE_LABELS.get(node, node)}
+                    if node == "gate":
+                        payload["is_research"] = delta.get("is_research", True)
+                        payload["reason"] = delta.get("gate_reason", "")
+                    if node == "smalltalk":
+                        direct_reply = delta.get("direct_reply", "")
+                        payload["chars"] = len(direct_reply)
                     if node == "planner":
                         payload["brief"] = delta.get("brief", [])
                     if node == "research_one":
@@ -66,7 +74,7 @@ async def research_stream(topic: str = Query(min_length=2, max_length=200)):
                         report = delta.get("report", "")
                         payload["chars"] = len(report)
                     yield _sse("stage", payload)
-            yield _sse("report", {"markdown": report or ""})
+            yield _sse("report", {"markdown": report or direct_reply or ""})
         except Exception as e:  # noqa: BLE001 - 流里炸了也要把错误推给前端
             yield _sse("error", {"message": f"{type(e).__name__}: {e}"})
 

@@ -18,10 +18,12 @@ from insight_agent.config import Settings
 from insight_agent.graph.nodes import (
     make_archive,
     make_compress,
+    make_gate,
     make_gap_analyzer,
     make_planner,
     make_recall,
     make_research_one,
+    make_smalltalk,
     make_writer,
 )
 from insight_agent.graph.state import ResearchState
@@ -34,6 +36,13 @@ def route_after_planner(state: dict):
     if not brief:
         return "writer"
     return [Send("research_one", {"question": q}) for q in brief]
+
+
+def route_after_gate(state: dict):
+    """入口分流：研究请求 → 流水线；闲聊 → 直答后结束。"""
+    if state.get("is_research", True):
+        return "recall"
+    return "smalltalk"
 
 
 def build_research_graph(
@@ -61,6 +70,8 @@ def build_research_graph(
     )
 
     builder = StateGraph(ResearchState)
+    builder.add_node("gate", make_gate(llm, cfg))
+    builder.add_node("smalltalk", make_smalltalk(llm))
     builder.add_node("recall", make_recall(store, card_store))
     builder.add_node("planner", make_planner(llm))
     builder.add_node("research_one", make_research_one(llm, cfg, pool))
@@ -73,7 +84,9 @@ def build_research_graph(
     )
     builder.add_node("archive", make_archive(store))
 
-    builder.add_edge(START, "recall")
+    builder.add_edge(START, "gate")
+    builder.add_conditional_edges("gate", route_after_gate)
+    builder.add_edge("smalltalk", END)
     builder.add_edge("recall", "planner")
     builder.add_conditional_edges("planner", route_after_planner)
     builder.add_edge("research_one", "compress")
