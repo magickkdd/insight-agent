@@ -18,11 +18,13 @@ from langchain_openai import ChatOpenAI
 from insight_agent.config import load_settings
 from insight_agent.graph.build import build_research_graph
 from insight_agent.graph.llm_factory import get_llm
+from insight_agent.memory.chat_history import ChatHistoryStore
 from insight_agent.memory.notes import NotesStore
 
 settings = load_settings()
 llm = get_llm("main", settings)
-graph = build_research_graph(llm, notes_store=NotesStore(), settings=settings)
+chat_store = ChatHistoryStore()
+graph = build_research_graph(llm, notes_store=NotesStore(), settings=settings, chat_store=chat_store)
 
 NODE_LABELS = {
     "gate": "判断研究意图",
@@ -50,14 +52,23 @@ def _sse(event: str, payload: dict) -> str:
 
 
 @app.get("/api/research/stream")
-async def research_stream(topic: str = Query(min_length=2, max_length=200)):
-    """SSE：逐节点推送研究进度，最后推送完整报告。"""
+async def research_stream(
+    topic: str = Query(min_length=2, max_length=200),
+    session_id: str = Query(default="web"),
+):
+    """SSE：逐节点推送研究进度，最后推送完整报告。
+
+    session_id 由前端 localStorage 维持 —— 同一会话的闲聊才有记忆。
+    """
 
     async def generate():
         yield _sse("start", {"topic": topic})
         report = None
+        direct_reply = ""
         try:
-            async for chunk in graph.astream({"topic": topic}, stream_mode="updates"):
+            async for chunk in graph.astream(
+                {"topic": topic, "session_id": session_id}, stream_mode="updates"
+            ):
                 for node, delta in chunk.items():
                     payload = {"node": node, "label": NODE_LABELS.get(node, node)}
                     if node == "gate":

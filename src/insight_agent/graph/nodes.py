@@ -71,11 +71,12 @@ class IntentJudgement(BaseModel):
     reason: str = Field(description="一句话理由")
 
 
-def make_gate(llm: ChatOpenAI, settings: Settings):
+def make_gate(llm: ChatOpenAI, settings: Settings, chats=None):
     """入口意图门卫（Routing 模式）：区分"研究请求"与"闲聊/寒暄"。
 
     闲聊不进研究流水线（省额度、避免对"你好"硬拆提纲的滑稽场面）。
     规则先行：过短输入直接判闲聊，不花 LLM 调用。
+    带最近几轮对话历史："继续"这类依赖上下文的输入才判得准。
     """
 
     def gate(state: dict) -> dict:
@@ -83,8 +84,16 @@ def make_gate(llm: ChatOpenAI, settings: Settings):
         # 规则层：太短或明显寒暄词开头，不值得一次研究
         if len(topic) < 4 and not any(ch.isascii() for ch in topic):
             return {"gate_reason": "输入过短", "is_research": False}
+        hist = ""
+        if chats is not None:
+            turns = chats.load(state.get("session_id", "web"))[-3:]
+            if turns:
+                recent = "\n".join(
+                    f"用户：{t['user'][:80]}\n助手：{t['assistant'][:80]}" for t in turns
+                )
+                hist = f"最近对话（供参考）：\n{recent}\n\n"
         judgement = llm.with_structured_output(IntentJudgement).invoke(
-            f"用户输入：{topic}\n\n"
+            f"{hist}用户输入：{topic}\n\n"
             "判断它是否是一个值得联网搜索调研的正式研究主题（行业/产品/技术/事件/数据等）。"
             "日常寒暄、闲聊、求助对话、无法定义研究范围的话，判为非研究。"
         )
@@ -93,20 +102,26 @@ def make_gate(llm: ChatOpenAI, settings: Settings):
     return gate
 
 
-def make_smalltalk(llm: ChatOpenAI):
-    """闲聊直答节点：不走研究流水线，普通对话即可。"""
+def make_smalltalk(llm: ChatOpenAI, chats=None):
+    """闲聊直答节点：不走研究流水线，带上会话历史对话（有记忆的金鱼）。"""
 
     def smalltalk(state: dict) -> dict:
-        result = llm.invoke(
-            [
-                (
-                    "system",
-                    "你是 Insight Agent 助手。用户没有提出研究请求，"
-                    "请友好简短地回复，并提示：想生成研究报告可以输入一个具体主题。",
-                ),
-                ("user", state["topic"]),
-            ]
-        )
+        sid = state.get("session_id", "web")
+        messages = [
+            (
+                "system",
+                "你是 Insight Agent 助手。用户没有提出研究请求，"
+                "请友好简短地回复，并提示：想生成研究报告可以输入一个具体主题。",
+            )
+        ]
+        if chats is not None:
+            for t in chats.load(sid):
+                messages.append(("user", t["user"]))
+                messages.append(("assistant", t["assistant"]))
+        messages.append(("user", state["topic"]))
+        result = llm.invoke(messages)
+        if chats is not None:
+            chats.append(sid, state["topic"], str(result.content))
         return {"direct_reply": result.content}
 
     return smalltalk

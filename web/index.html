@@ -81,6 +81,13 @@ function renderMd(md) {
 $('go').onclick = run;
 $('topic').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
 
+// 会话标识：localStorage 持久化，同一浏览器的闲聊记忆跨刷新延续
+let SESSION = localStorage.getItem('insight_session');
+if (!SESSION) {
+  SESSION = (crypto.randomUUID ? crypto.randomUUID() : 's-' + Date.now());
+  localStorage.setItem('insight_session', SESSION);
+}
+
 function run() {
   if (running) return;
   const topic = $('topic').value.trim();
@@ -88,7 +95,8 @@ function run() {
   $('err').textContent = ''; $('stages').innerHTML = ''; $('report').innerHTML = '';
   running = true; $('go').disabled = true;
 
-  const es = new EventSource('/api/research/stream?topic=' + encodeURIComponent(topic));
+  const es = new EventSource('/api/research/stream?topic=' + encodeURIComponent(topic)
+    + '&session_id=' + encodeURIComponent(SESSION));
   es.addEventListener('stage', e => {
     const d = JSON.parse(e.data);
     if (d.node === 'planner' && d.brief) { window.briefTotal = d.brief.length; window.briefDone = 0; }

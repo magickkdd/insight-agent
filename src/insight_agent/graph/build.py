@@ -49,7 +49,10 @@ def build_research_graph(
     llm: ChatOpenAI,
     notes_store: NotesStore | None = None,
     settings: Settings | None = None,
+    chat_store=None,
 ) -> CompiledStateGraph:
+    """chat_store（ChatHistoryStore）只服务闲聊分支的对话记忆；
+    传 None 时 gate/smalltalk 退化为无记忆行为（eval 等单轮场景够用）。"""
     from insight_agent.config import load_settings
     from insight_agent.graph.verify import make_verify_node
     from insight_agent.memory.evidence_pool import EvidencePool
@@ -70,8 +73,8 @@ def build_research_graph(
     )
 
     builder = StateGraph(ResearchState)
-    builder.add_node("gate", make_gate(llm, cfg))
-    builder.add_node("smalltalk", make_smalltalk(llm))
+    builder.add_node("gate", make_gate(llm, cfg, chat_store))
+    builder.add_node("smalltalk", make_smalltalk(llm, chat_store))
     builder.add_node("recall", make_recall(store, card_store))
     builder.add_node("planner", make_planner(llm))
     builder.add_node("research_one", make_research_one(llm, cfg, pool))
