@@ -7,9 +7,10 @@
 """
 
 import json
+import re
 from pathlib import Path
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -51,6 +52,52 @@ def _sse(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
+_REPORTS_DIR = Path("data/reports")
+
+
+@app.get("/api/history")
+def history():
+    """历史研究报告列表：clean 版为准，幻觉率/可信度从同名标注版头部解析。"""
+    items = []
+    if _REPORTS_DIR.exists():
+        for p in sorted(_REPORTS_DIR.glob("*.md"), reverse=True):
+            if p.name.endswith("_annotated.md"):
+                continue
+            text = p.read_text(encoding="utf-8")
+            lines = text.splitlines()
+            title = lines[0].lstrip("# ").strip() if lines else p.stem
+            hallucination = score = None
+            ann = p.with_name(p.stem + "_annotated.md")
+            if ann.exists():
+                head = ann.read_text(encoding="utf-8")[:400]
+                m = re.search(r"幻觉率[：:]\s*([^\n]+)", head)
+                if m:
+                    hallucination = m.group(1).strip()
+                m = re.search(r"可信度评分[：:]\s*([^\n]+)", head)
+                if m:
+                    score = m.group(1).strip()
+            items.append(
+                {
+                    "file": p.name,
+                    "title": title[:60],
+                    "hallucination": hallucination,
+                    "score": score,
+                }
+            )
+    return {"items": items[:50]}
+
+
+@app.get("/api/report")
+def get_report(file: str = Query(...)):
+    """读取单份历史报告全文（文件名白名单校验，防路径穿越）。"""
+    if "/" in file or "\\" in file or ".." in file or not file.endswith(".md"):
+        raise HTTPException(status_code=400, detail="非法文件名")
+    p = _REPORTS_DIR / file
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="报告不存在")
+    return {"markdown": p.read_text(encoding="utf-8")}
+
+
 @app.get("/api/research/stream")
 async def research_stream(
     topic: str = Query(min_length=2, max_length=200),
@@ -70,6 +117,7 @@ async def research_stream(
         yield _sse("start", {"topic": topic, "depth": depth, "focus": focus})
         report = None
         direct_reply = ""
+        verification: dict = {}
         try:
             async for chunk in graph.astream(
                 {"topic": topic, "session_id": session_id, "depth": depth, "focus": focus},
@@ -114,6 +162,7 @@ async def research_stream(
                         payload["detail"] = f"报告 {len(report)} 字"
                     if node == "verify":
                         v = delta.get("verification", {})
+                        verification = v
                         parts = []
                         if v.get("hallucination_rate") is not None:
                             parts.append(f"幻觉率 {v['hallucination_rate']:.1%}")
@@ -124,7 +173,10 @@ async def research_stream(
                     if node == "archive":
                         payload["detail"] = "已写入笔记库与报告目录"
                     yield _sse("stage", payload)
-            yield _sse("report", {"markdown": report or direct_reply or ""})
+            yield _sse(
+                "report",
+                {"markdown": report or direct_reply or "", "verification": verification},
+            )
         except Exception as e:  # noqa: BLE001 - 流里炸了也要把错误推给前端
             yield _sse("error", {"message": f"{type(e).__name__}: {e}"})
 

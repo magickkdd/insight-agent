@@ -406,7 +406,12 @@ def make_archive(store: NotesStore, reports_dir: str | Path = "data/reports"):
             (rdir / f"{ts}.md").write_text(f"# {state['topic']}\n\n{report}", encoding="utf-8")
             hr = verification.get("hallucination_rate")
             score = verification.get("score")
-            head = f"# {state['topic']}（标注版）\n\n- 幻觉率：{hr}\n- 可信度评分：{score}\n\n"
+            hr_s = f"{hr:.1%}" if isinstance(hr, (int, float)) else "—"
+            sc_s = str(score) if score is not None else "—"
+            head = (
+                f"# {state['topic']}（标注版）\n\n"
+                f"- 幻觉率：{hr_s}\n- 可信度评分：{sc_s}\n\n"
+            )
             (rdir / f"{ts}_annotated.md").write_text(head + annotated, encoding="utf-8")
         return {"saved": True}
 

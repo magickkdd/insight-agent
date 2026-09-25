@@ -8,7 +8,7 @@
   :root {
     --bg:#0a0d12; --panel:#11151d; --panel2:#161c26; --border:#232b3a; --border2:#31405c;
     --text:#e8ecf3; --muted:#8a94a8;
-    --brand:#10b981; --brand2:#06b6d4;
+    --brand:#10b981; --brand2:#06b6d4; --warn:#e8a33d; --bad:#ef6a5a;
     --grad:linear-gradient(135deg,#10b981,#06b6d4);
     --shadow:0 10px 40px rgba(0,0,0,.4);
   }
@@ -19,78 +19,107 @@
     }
   }
   * { box-sizing:border-box; }
-  html { color-scheme: dark light; }
-  body {
-    margin:0; font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
-    background:var(--bg); color:var(--text); line-height:1.6;
-  }
-  body::before {
-    content:''; position:fixed; inset:0; pointer-events:none;
+  html { color-scheme:dark light; }
+  body { margin:0; font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.6; }
+  body::before { content:''; position:fixed; inset:0; pointer-events:none;
     background:
       radial-gradient(640px 320px at 12% -6%, rgba(16,185,129,.16), transparent 70%),
-      radial-gradient(640px 320px at 88% -6%, rgba(6,182,212,.13), transparent 70%);
-  }
-  .wrap { max-width: 880px; margin:0 auto; padding:28px 18px 80px; position:relative; }
+      radial-gradient(640px 320px at 88% -6%, rgba(6,182,212,.13), transparent 70%); }
+  .wrap { max-width:880px; margin:0 auto; padding:22px 18px 90px; position:relative; }
 
-  header { display:flex; align-items:center; gap:12px; margin-bottom:4px; }
+  /* ---------- 顶部栏 ---------- */
+  .top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .logo { display:flex; align-items:center; gap:12px; }
   .mark { width:28px; height:28px; border-radius:9px; background:var(--grad);
-          box-shadow:0 0 20px rgba(16,185,129,.45); flex:none; }
-  h1 { font-size:21px; margin:0; letter-spacing:.3px; }
-  .sub { color:var(--muted); font-size:13px; margin:2px 0 26px 40px; }
+    box-shadow:0 0 20px rgba(16,185,129,.45); flex:none; }
+  h1 { font-size:20px; margin:0; letter-spacing:.3px; }
+  .top-actions { display:flex; align-items:center; gap:8px; }
+  .timer { font-family:ui-monospace,Consolas,monospace; font-size:12.5px;
+    color:var(--brand2); min-width:46px; text-align:right; visibility:hidden; }
+  .timer.show { visibility:visible; }
+  .ghost { padding:8px 14px; border-radius:9px; background:var(--panel2);
+    border:1px solid var(--border); color:var(--muted); font-size:12.5px;
+    cursor:pointer; transition:color .2s, border-color .2s; }
+  .ghost:hover { color:var(--text); border-color:var(--border2); }
+  #cancel { display:none; color:var(--bad); border-color:rgba(239,106,90,.4); }
+  #cancel.show { display:block; }
+  .sub { color:var(--muted); font-size:13px; margin:4px 0 22px 40px; }
 
+  /* ---------- 输入区 ---------- */
   .ask { display:flex; gap:10px; background:var(--panel); border:1px solid var(--border);
-         border-radius:16px; padding:10px; box-shadow:var(--shadow);
-         transition:border-color .25s, box-shadow .25s; }
+    border-radius:16px; padding:10px; box-shadow:var(--shadow);
+    transition:border-color .25s, box-shadow .25s; }
   .ask:focus-within { border-color:var(--brand);
     box-shadow:0 0 0 3px rgba(16,185,129,.15), var(--shadow); }
-  input { flex:1; padding:12px 14px; border:0; outline:0; border-radius:10px;
-          font-size:14.5px; background:transparent; color:var(--text); }
-  input::placeholder { color:var(--muted); }
+  input#topic { flex:1; padding:12px 14px; border:0; outline:0; border-radius:10px;
+    font-size:14.5px; background:transparent; color:var(--text); }
+  input#topic::placeholder { color:var(--muted); }
   button#go { padding:12px 26px; border:0; border-radius:11px; background:var(--grad);
     color:#fff; font-size:14px; font-weight:600; cursor:pointer;
     transition:transform .15s, filter .15s; white-space:nowrap; }
   button#go:hover:not(:disabled) { filter:brightness(1.12); transform:translateY(-1px); }
   button#go:disabled { opacity:.45; cursor:default; }
 
-  .mode-chip { display:inline-flex; align-items:center; gap:8px; margin:18px 0 4px;
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  .chip { padding:7px 14px; border-radius:999px; background:var(--panel);
+    border:1px solid var(--border); color:var(--muted); font-size:12.5px;
+    cursor:pointer; transition:all .2s; }
+  .chip:hover { color:var(--text); border-color:var(--brand); background:var(--panel2); }
+
+  /* ---------- 时间线 ---------- */
+  .mode-chip { display:inline-flex; align-items:center; gap:8px; margin:18px 0 6px;
     padding:6px 14px; border-radius:999px; background:var(--panel2);
     border:1px solid var(--border); color:var(--muted); font-size:12.5px; }
   .mode-chip::before { content:''; width:7px; height:7px; border-radius:50%;
     background:var(--grad); animation:pulse 1.6s ease infinite; }
-
-  #feed { margin-top:10px; }
+  #feed { margin-top:8px; }
   .stage { position:relative; display:flex; gap:14px; padding:4px 0 20px;
-           animation:rise .35s ease both; }
+    animation:rise .35s ease both; }
   .stage .node { position:relative; width:14px; flex:none; display:flex; justify-content:center; }
   .stage .node::before { content:''; position:absolute; top:22px; bottom:-4px; width:2px;
     background:var(--border); border-radius:2px; }
   .stage:last-of-type .node::before { display:none; }
   .dot { width:10px; height:10px; border-radius:50%; background:var(--muted);
-         margin-top:6px; z-index:1; transition:background .3s; }
+    margin-top:6px; z-index:1; transition:background .3s; }
   .stage.running .dot { background:var(--brand2); animation:pulse 1.4s ease infinite; }
   .stage.done .dot { background:var(--brand); box-shadow:0 0 10px rgba(16,185,129,.55); }
+  .stage.cancelled .dot { background:var(--muted); }
   .stage .name { font-size:14px; font-weight:600; padding-top:2px; }
+  .stage .dur { color:var(--brand2); font-family:ui-monospace,monospace;
+    font-size:12px; font-weight:400; margin-left:8px; }
   .stage .detail { color:var(--muted); font-size:12.5px; line-height:1.7;
-                   margin-top:5px; white-space:pre-wrap; }
+    margin-top:5px; white-space:pre-wrap; }
 
-  #report { position:relative; background:var(--panel); border:1px solid var(--border);
-    border-radius:16px; padding:28px 32px 32px; margin-top:26px; box-shadow:var(--shadow);
-    font-size:14px; line-height:1.8; animation:rise .4s ease both; }
-  #report::before { content:''; position:absolute; top:-1px; left:26px; right:26px;
+  /* ---------- 报告 ---------- */
+  #report-card { position:relative; background:var(--panel); border:1px solid var(--border);
+    border-radius:16px; padding:16px 32px 30px; margin-top:24px; box-shadow:var(--shadow);
+    display:none; }
+  #report-card.show { display:block; animation:rise .4s ease both; }
+  #report-card::before { content:''; position:absolute; top:-1px; left:26px; right:26px;
     height:2px; background:var(--grad); border-radius:2px; }
+  #report-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    padding:6px 0 14px; border-bottom:1px solid var(--border); margin-bottom:6px; }
+  .badge { padding:4px 11px; border-radius:999px; background:var(--panel2);
+    border:1px solid var(--border); font-size:12px; color:var(--muted); }
+  .badge.ok { color:var(--brand); border-color:rgba(16,185,129,.35); }
+  .badge.warn { color:var(--warn); border-color:rgba(232,163,61,.4); }
+  .spacer { flex:1; }
+  #report { font-size:14px; line-height:1.8; }
   #report h2 { font-size:19px; margin:22px 0 10px; padding-bottom:8px;
     border-bottom:1px solid var(--border); }
-  #report h2:first-child { margin-top:0; }
+  #report h2:first-child { margin-top:8px; }
   #report h3 { font-size:16px; margin:18px 0 8px; }
   #report h4 { font-size:14.5px; margin:14px 0 6px; }
   #report p { margin:8px 0; }
-  #report a { color:var(--brand2); text-decoration:none; border-bottom:1px dashed var(--border2); }
+  #report a { color:var(--brand2); text-decoration:none;
+    border-bottom:1px dashed var(--border2); }
   #report a:hover { border-bottom-style:solid; }
-  #report b { color:var(--text); }
   #report code { font-family:ui-monospace,Consolas,monospace; font-size:12.5px;
-    background:var(--panel2); border:1px solid var(--border); border-radius:5px; padding:1px 6px; }
-  #report pre { background:var(--panel2); border:1px solid var(--border); border-radius:10px;
-    padding:12px 16px; overflow-x:auto; }
+    background:var(--panel2); border:1px solid var(--border); border-radius:5px;
+    padding:1px 6px; }
+  #report pre { background:var(--panel2); border:1px solid var(--border);
+    border-radius:10px; padding:12px 16px; overflow-x:auto; }
   #report pre code { background:none; border:0; padding:0; }
   #report blockquote { margin:10px 0; padding:6px 16px; border-left:3px solid var(--brand);
     background:var(--panel2); border-radius:0 8px 8px 0; color:var(--muted); }
@@ -102,6 +131,16 @@
   #report th, #report td { border:1px solid var(--border); padding:8px 12px; }
   #report tbody tr:nth-child(even) { background:rgba(128,140,160,.05); }
 
+  #sources { margin-top:20px; padding-top:14px; border-top:1px solid var(--border);
+    display:none; }
+  #sources.show { display:block; }
+  #sources .src-title { color:var(--muted); font-size:12.5px; margin-bottom:8px; }
+  .src-item { font-size:12.5px; margin:5px 0; color:var(--muted);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .src-item a { color:var(--brand2); text-decoration:none; }
+  .src-item .dom { color:var(--muted); opacity:.75; }
+
+  /* ---------- 深入按钮 ---------- */
   .drill-tip { color:var(--muted); font-size:13px; margin:22px 0 10px; }
   .drill-btn { display:block; width:100%; text-align:left; margin-bottom:8px;
     padding:12px 16px; background:var(--panel); color:var(--text);
@@ -112,37 +151,91 @@
   .drill-btn:disabled { opacity:.5; cursor:default; }
   .drill-btn .go { color:var(--brand); font-weight:700; margin-right:8px; }
 
-  #err { display:none; color:#ef6a5a; background:rgba(239,106,90,.08);
-    border:1px solid rgba(239,106,90,.3); border-left:3px solid #ef6a5a;
+  #err { display:none; color:var(--bad); background:rgba(239,106,90,.08);
+    border:1px solid rgba(239,106,90,.3); border-left:3px solid var(--bad);
     border-radius:10px; padding:10px 16px; margin-top:18px; font-size:13px; }
   #err.show { display:block; animation:rise .3s ease both; }
 
-  @keyframes rise { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:none; } }
+  /* ---------- 历史抽屉 ---------- */
+  #mask { position:fixed; inset:0; background:rgba(0,0,0,.55); opacity:0;
+    pointer-events:none; transition:opacity .3s; z-index:40; }
+  #mask.show { opacity:1; pointer-events:auto; }
+  #drawer { position:fixed; top:0; right:-440px; width:420px; max-width:94vw; height:100vh;
+    background:var(--panel); border-left:1px solid var(--border); z-index:50;
+    transition:right .3s ease; overflow-y:auto; padding:20px 22px; }
+  #drawer.open { right:0; }
+  .drawer-head { display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:16px; }
+  .drawer-head b { font-size:15px; }
+  .h-item { padding:12px 14px; background:var(--panel2); border:1px solid var(--border);
+    border-radius:12px; margin-bottom:10px; cursor:pointer;
+    transition:border-color .2s, transform .15s; }
+  .h-item:hover { border-color:var(--brand); transform:translateX(-3px); }
+  .h-title { font-size:13.5px; font-weight:600; margin-bottom:4px; }
+  .h-meta { color:var(--muted); font-size:12px; font-family:ui-monospace,monospace; }
+  .empty { color:var(--muted); font-size:13px; text-align:center; padding:40px 0; }
+
+  @keyframes rise { from { opacity:0; transform:translateY(7px); }
+                    to { opacity:1; transform:none; } }
   @keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(6,182,212,.45); }
                      50% { box-shadow:0 0 0 7px rgba(6,182,212,0); } }
+
+  @media (max-width:640px) {
+    .wrap { padding:16px 12px 70px; }
+    .ask { flex-direction:column; }
+    button#go { width:100%; }
+    .sub { margin-left:0; }
+    #report-card { padding:14px 18px 22px; }
+    .timer { display:none; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <div class="mark"></div>
-    <h1>Insight Agent</h1>
-  </header>
+  <div class="top">
+    <div class="logo">
+      <div class="mark"></div>
+      <h1>Insight Agent</h1>
+    </div>
+    <div class="top-actions">
+      <span id="timer" class="timer"></span>
+      <button id="cancel" class="ghost">取消</button>
+      <button id="history-btn" class="ghost">历史研究</button>
+    </div>
+  </div>
   <div class="sub">行业洞察研究助手 · 概览秒出，深入有据 · 全程可观测 · 幻觉率可量化</div>
 
   <div class="ask">
     <input id="topic" placeholder="输入研究主题，例如：低空经济的政策进展与商业化落地">
     <button id="go">开始研究</button>
   </div>
+  <div class="chips" id="chips"></div>
 
   <div id="feed"></div>
   <div id="err"></div>
-  <div id="report"></div>
+
+  <div id="report-card">
+    <div id="report-meta"></div>
+    <div id="report"></div>
+    <div id="sources"></div>
+  </div>
 </div>
+
+<div id="mask"></div>
+<aside id="drawer">
+  <div class="drawer-head">
+    <b>历史研究报告</b>
+    <button id="close-drawer" class="ghost">关闭</button>
+  </div>
+  <div id="history-list"></div>
+</aside>
 
 <script>
 const $ = (id) => document.getElementById(id);
 let running = false;
+let es = null;                 // 当前 SSE 连接（取消用）
+let lastMdFull = '';           // 报告原始 Markdown（复制/来源汇总用）
+let loadedTitle = '';          // 当前报告主题（历史报告"重新研究"用）
 
 // 会话标识：localStorage 持久化，同一浏览器的闲聊记忆跨刷新延续
 let SESSION = localStorage.getItem('insight_session');
@@ -154,22 +247,48 @@ if (!SESSION) {
 let lastTopic = '';   // 概览主题（深入请求沿用，避免用户改了输入框导致跑偏）
 let lastBrief = [];   // 概览提纲（深入按钮的数据源）
 
+// ---------- 工具 ----------
+
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmtDur = s => s < 60 ? s.toFixed(0) + 's'
+  : Math.floor(s/60) + 'm' + String(Math.round(s%60)).padStart(2,'0') + 's';
+const fileDate = f => { const m = f.match(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})/);
+  return m ? `${m[2]}-${m[3]} ${m[4]}:${m[5]}` : f; };
+
+function showError(msg) { $('err').textContent = msg; $('err').classList.add('show'); }
+
+// ---------- 快捷主题 ----------
+
+const CHIPS = [
+  '具身智能最新融资动态',
+  '低空经济政策进展与商业化',
+  'AI 编程工具竞争格局',
+  '人形机器人量产落地进展',
+  '大模型 API 降价的影响',
+];
+$('chips').innerHTML = CHIPS.map(c => `<button class="chip">${esc(c)}</button>`).join('');
+document.querySelectorAll('.chip').forEach(b =>
+  b.onclick = () => { $('topic').value = b.textContent; run(); });
+
 // ---------- 时间线 ----------
 
-function addStage(label) {
+function addStage(d) {
   const div = document.createElement('div');
   div.className = 'stage running';
-  div.dataset.node = label.node; div.dataset.label = label.label;
+  div.dataset.node = d.node; div.dataset.label = d.label;
+  div._started = performance.now();
   div.innerHTML = '<div class="node"><div class="dot"></div></div>'
-    + '<div class="body"><div class="name">' + label.label + ' …</div></div>';
+    + '<div class="body"><div class="name">' + esc(d.label) + ' …</div></div>';
   $('feed').appendChild(div);
   return div;
 }
 
 function finishStage(el) {
   el.classList.remove('running'); el.classList.add('done');
-  const name = el.querySelector('.name');
-  name.textContent = el.dataset.label;
+  const dur = el._started ? (performance.now() - el._started) / 1000 : 0;
+  el.querySelector('.name').innerHTML =
+    esc(el.dataset.label)
+    + (dur >= 0.05 ? '<span class="dur">' + dur.toFixed(1) + 's</span>' : '');
 }
 
 function setDetail(el, text) {
@@ -180,7 +299,21 @@ function setDetail(el, text) {
 }
 
 function setMode(text) {
-  $('feed').innerHTML = '<div class="mode-chip">' + text + '</div>';
+  $('feed').innerHTML = '<div class="mode-chip">' + esc(text) + '</div>';
+}
+
+// ---------- 计时器 ----------
+
+let t0 = 0, timerInt = null;
+function startTimer() {
+  t0 = Date.now();
+  $('timer').classList.add('show');
+  $('timer').textContent = '0s';
+  timerInt = setInterval(() => { $('timer').textContent = fmtDur((Date.now()-t0)/1000); }, 500);
+}
+function stopTimer() {
+  clearInterval(timerInt); timerInt = null;
+  $('timer').textContent = fmtDur((Date.now()-t0)/1000);
 }
 
 // ---------- 极简 Markdown 渲染（零依赖）：标题/表格/列表/代码块/引用 ----------
@@ -193,7 +326,6 @@ function inlineMd(t) {
 }
 
 function renderMd(md) {
-  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const lines = md.replace(/\r/g,'').split('\n');
   let html = '', i = 0, inCode = false, codeBuf = [], listBuf = [], listType = null;
   const flushList = () => {
@@ -204,7 +336,7 @@ function renderMd(md) {
   };
   while (i < lines.length) {
     const line = lines[i];
-    if (line.trim().startsWith('```')) {           // 围栏代码块
+    if (line.trim().startsWith('```')) {
       flushList();
       if (!inCode) { inCode = true; codeBuf = []; }
       else { inCode = false; html += '<pre><code>' + esc(codeBuf.join('\n')) + '</code></pre>'; }
@@ -213,20 +345,19 @@ function renderMd(md) {
     if (inCode) { codeBuf.push(line); i++; continue; }
     if (/^\s*$/.test(line)) { flushList(); i++; continue; }
     let m;
-    if ((m = line.match(/^(#{1,4})\s+(.*)$/))) {   // 标题
+    if ((m = line.match(/^(#{1,4})\s+(.*)$/))) {
       flushList();
-      const lvl = m[1].length;                     // # → h2（报告里 # 是文档标题）
-      const tag = 'h' + Math.min(lvl + 1, 5);
+      const tag = 'h' + Math.min(m[1].length + 1, 5);   // 报告里 # 是文档标题
       html += '<' + tag + '>' + inlineMd(esc(m[2])) + '</' + tag + '>';
       i++; continue;
     }
     if (/^(-{3,}|\*{3,})\s*$/.test(line)) { flushList(); html += '<hr>'; i++; continue; }
-    if (/^>\s?/.test(line)) {                      // 引用块
+    if (/^>\s?/.test(line)) {
       flushList();
       html += '<blockquote>' + inlineMd(esc(line.replace(/^>\s?/, ''))) + '</blockquote>';
       i++; continue;
     }
-    if (/^\|.*\|\s*$/.test(line)) {                // 表格（第二行必须是分隔行）
+    if (/^\|.*\|\s*$/.test(line)) {
       flushList();
       const rows = [];
       while (i < lines.length && /^\|.*\|\s*$/.test(lines[i])) { rows.push(lines[i]); i++; }
@@ -243,11 +374,11 @@ function renderMd(md) {
       }
       continue;
     }
-    if ((m = line.match(/^\s*[-*]\s+(.*)$/))) {    // 无序列表
+    if ((m = line.match(/^\s*[-*]\s+(.*)$/))) {
       if (listType && listType !== 'ul') flushList();
       listType = 'ul'; listBuf.push(esc(m[1])); i++; continue;
     }
-    if ((m = line.match(/^\s*\d+[.、)]\s+(.*)$/))) { // 有序列表（含中文顿号）
+    if ((m = line.match(/^\s*\d+[.、)]\s+(.*)$/))) {
       if (listType && listType !== 'ol') flushList();
       listType = 'ol'; listBuf.push(esc(m[1])); i++; continue;
     }
@@ -260,22 +391,87 @@ function renderMd(md) {
   return html;
 }
 
-// ---------- 交互主流程 ----------
+// ---------- 报告元信息条 / 来源汇总 ----------
+
+function renderMeta(verification, opts = {}) {
+  const words = lastMdFull.replace(/\s/g, '').length;
+  let html = '<span class="badge">' + words.toLocaleString() + ' 字</span>';
+  const hr = verification ? verification.hallucination_rate : null;
+  if (hr !== null && hr !== undefined) {
+    const cls = hr < 0.1 ? 'ok' : 'warn';
+    html += '<span class="badge ' + cls + '">幻觉率 ' + (hr * 100).toFixed(1) + '%</span>';
+  }
+  const sc = verification ? verification.score : null;
+  if (sc !== null && sc !== undefined)
+    html += '<span class="badge">可信度 ' + esc(sc) + '</span>';
+  html += '<span class="spacer"></span>';
+  if (opts.reuseTitle)
+    html += '<button id="reuse" class="ghost">以此主题开始新研究</button>';
+  html += '<button id="copy" class="ghost">复制 Markdown</button>';
+  $('report-meta').innerHTML = html;
+  $('copy').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(lastMdFull);
+      $('copy').textContent = '已复制 ✓';
+      setTimeout(() => { $('copy').textContent = '复制 Markdown'; }, 1500);
+    } catch { showError('复制失败：浏览器不允许访问剪贴板'); }
+  };
+  if (opts.reuseTitle) {
+    $('reuse').onclick = () => { $('topic').value = loadedTitle; run(); };
+  }
+}
+
+function renderSources() {
+  const seen = new Set(); const items = [];
+  for (const m of lastMdFull.matchAll(/\[([^\]]+)\]\((https?:[^)]+)\)/g)) {
+    if (seen.has(m[2])) continue;
+    seen.add(m[2]);
+    let dom = m[2];
+    try { dom = new URL(m[2]).hostname; } catch {}
+    items.push({ url: m[2], dom });
+    if (items.length >= 30) break;
+  }
+  const box = $('sources');
+  if (!items.length) { box.className = ''; box.innerHTML = ''; return; }
+  box.className = 'show';
+  box.innerHTML = '<div class="src-title">参考来源（' + items.length + '）</div>'
+    + items.map((it, i) =>
+      '<div class="src-item">[' + (i + 1) + '] <a href="' + it.url
+      + '" target="_blank">' + esc(it.dom) + '</a></div>').join('');
+}
+
+// ---------- 主流程 ----------
 
 $('go').onclick = () => run();  // 必须包一层：直接赋值会把 Event 对象当成 focus 参数
 $('topic').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+$('cancel').onclick = () => {
+  if (es) es.close();
+  finishRun();
+  document.querySelectorAll('.stage.running').forEach(el => {
+    el.classList.remove('running'); el.classList.add('cancelled');
+    el.querySelector('.name').innerHTML += '<span class="dur">已取消</span>';
+  });
+};
+
+function finishRun() {
+  running = false; $('go').disabled = false;
+  $('cancel').classList.remove('show');
+  document.querySelectorAll('.drill-btn').forEach(b => b.disabled = false);
+}
 
 function run(focus) {
   if (running) return;
   const isFocus = !!focus;
   const topic = isFocus ? lastTopic : $('topic').value.trim();
   if (!topic) { showError('请输入研究主题'); return; }
-  if (!isFocus) { lastTopic = topic; $('report').innerHTML = ''; }
+  if (!isFocus) { lastTopic = topic; }
   $('err').classList.remove('show');
   $('feed').innerHTML = '';
   const drill = document.getElementById('drill'); if (drill) drill.remove();
   running = true; $('go').disabled = true;
-  document.querySelectorAll('.drill-btn').forEach(b => b.disabled = true);
+  $('cancel').classList.add('show');
+  startTimer();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 
   setMode(isFocus
     ? '深入模式 · 联网深读取证 + 逐句核验，约 1-2 分钟'
@@ -286,7 +482,7 @@ function run(focus) {
     + '&depth=' + (isFocus ? 'standard' : 'fast');
   if (isFocus) url += '&focus=' + encodeURIComponent(focus);
 
-  const es = new EventSource(url);
+  es = new EventSource(url);
   es.addEventListener('stage', e => {
     const d = JSON.parse(e.data);
     if (d.node === 'planner' && d.brief) {
@@ -309,18 +505,27 @@ function run(focus) {
     }
   });
   es.addEventListener('report', e => {
-    const md = JSON.parse(e.data).markdown;
+    const d = JSON.parse(e.data);
+    const md = d.markdown;
     if (isFocus) {
+      lastMdFull += '\n\n---\n\n## 深入：' + focus + '\n\n' + md;
       $('report').innerHTML += renderMd('\n\n---\n\n## 深入：' + focus + '\n\n' + md);
     } else {
+      lastMdFull = md;
       $('report').innerHTML = renderMd(md);
     }
+    $('report-card').classList.add('show');
+    renderMeta(d.verification, {});
+    renderSources();
     renderDrill();
-    es.close(); running = false; $('go').disabled = false;
+    finishRun();
+    stopTimer();
+    es.close();
   });
   es.addEventListener('error', e => {
     if (e.data) showError('出错：' + JSON.parse(e.data).message);
-    es.close(); running = false; $('go').disabled = false;
+    finishRun(); stopTimer();
+    es.close();
   });
 }
 
@@ -335,16 +540,67 @@ function renderDrill() {
   lastBrief.forEach(q => {
     const b = document.createElement('button');
     b.className = 'drill-btn';
-    b.innerHTML = '<span class="go">→</span>' + q;
+    b.innerHTML = '<span class="go">→</span>' + esc(q);
     b.onclick = () => run(q);
     div.appendChild(b);
   });
-  $('report').after(div);
+  $('report-card').after(div);
 }
 
-function showError(msg) {
-  const el = $('err');
-  el.textContent = msg; el.classList.add('show');
+// ---------- 历史抽屉 ----------
+
+$('history-btn').onclick = openHistory;
+$('close-drawer').onclick = closeHistory;
+$('mask').onclick = closeHistory;
+
+function closeHistory() {
+  $('drawer').classList.remove('open');
+  $('mask').classList.remove('show');
+}
+
+async function openHistory() {
+  $('drawer').classList.add('open');
+  $('mask').classList.add('show');
+  const list = $('history-list');
+  list.innerHTML = '<div class="empty">加载中…</div>';
+  try {
+    const r = await fetch('/api/history');
+    const data = await r.json();
+    if (!data.items.length) { list.innerHTML = '<div class="empty">还没有历史报告，先跑一次研究吧</div>'; return; }
+    list.innerHTML = '';
+    data.items.forEach(it => {
+      const div = document.createElement('div');
+      div.className = 'h-item';
+      const badge = it.hallucination && it.hallucination !== '—'
+        ? ' · 幻觉率 ' + esc(it.hallucination) : '';
+      div.innerHTML = '<div class="h-title">' + esc(it.title) + '</div>'
+        + '<div class="h-meta">' + fileDate(it.file) + badge + '</div>';
+      div.onclick = () => loadReport(it.file);
+      list.appendChild(div);
+    });
+  } catch {
+    list.innerHTML = '<div class="empty">加载失败</div>';
+  }
+}
+
+async function loadReport(file) {
+  try {
+    const r = await fetch('/api/report?file=' + encodeURIComponent(file));
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    lastMdFull = data.markdown;
+    loadedTitle = (data.markdown.split('\n')[0] || '').replace(/^#\s*/, '').trim() || file;
+    $('report').innerHTML = renderMd(data.markdown);
+    $('report-card').classList.add('show');
+    renderMeta(null, { reuseTitle: true });
+    renderSources();
+    lastBrief = [];                       // 历史视图不提供深入（需先重新研究）
+    const drill = document.getElementById('drill'); if (drill) drill.remove();
+    closeHistory();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch {
+    showError('报告加载失败');
+  }
 }
 </script>
 </body>
