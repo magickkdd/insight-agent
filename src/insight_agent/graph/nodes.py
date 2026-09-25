@@ -120,7 +120,9 @@ def make_smalltalk(llm: ChatOpenAI, chats=None):
             (
                 "system",
                 "你是 Insight Agent 助手。用户没有提出研究请求，"
-                "请友好简短地回复，并提示：想生成研究报告可以输入一个具体主题。",
+                "请友好简短地回复，并提示：想生成研究报告可以输入一个具体主题。\n"
+                f"当前日期：{_today()}。问今天日期/星期几时按这个日期回答，"
+                "不要凭记忆猜。",
             )
         ]
         if chats is not None:
