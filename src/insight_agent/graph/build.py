@@ -68,9 +68,8 @@ def build_research_graph(
     # 语义记忆：verify 产出的 supported claim 自动入卡（B→C 联动）
     card_store = FactCardStore(embedder=embedder)
 
-    verify_on = cfg.verify_enabled == "true" or (
-        cfg.verify_enabled == "auto" and cfg.research_depth != "fast"
-    )
+    # verify 开关原始值传给节点：auto 档在运行时按请求 depth 判定（概览 fast 跳过验证）
+    verify_flag = cfg.verify_enabled
 
     builder = StateGraph(ResearchState)
     builder.add_node("gate", make_gate(llm, cfg, chat_store))
@@ -83,7 +82,7 @@ def build_research_graph(
     builder.add_node("writer", make_writer(llm))
     builder.add_node(
         "verify",
-        make_verify_node(llm, verify_on, cfg.verify_max_claims, cfg.verify_concurrency, pool, card_store),
+        make_verify_node(llm, verify_flag, cfg.verify_max_claims, cfg.verify_concurrency, pool, card_store),
     )
     builder.add_node("archive", make_archive(store))
 

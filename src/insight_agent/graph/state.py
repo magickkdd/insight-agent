@@ -12,6 +12,8 @@ from typing import Annotated, TypedDict
 class ResearchState(TypedDict):
     topic: str
     session_id: str           # 会话标识（闲聊分支的对话记忆按此隔离）
+    depth: str                # 本请求档位 fast/standard/deep（分级交付：概览用 fast）
+    focus: str                # 聚焦子问题（非空时 planner 直接采用，用户点选深入）
     is_research: bool         # gate：是否为研究请求
     gate_reason: str          # gate：判定理由
     direct_reply: str         # smalltalk：闲聊直答（不走流水线）

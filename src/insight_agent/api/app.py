@@ -55,19 +55,25 @@ def _sse(event: str, payload: dict) -> str:
 async def research_stream(
     topic: str = Query(min_length=2, max_length=200),
     session_id: str = Query(default="web"),
+    depth: str = Query(default="fast"),
+    focus: str = Query(default=""),
 ):
     """SSE：逐节点推送研究进度，最后推送完整报告。
 
     session_id 由前端 localStorage 维持 —— 同一会话的闲聊才有记忆。
+    分级交付：概览 depth=fast（纯摘要，快）；深入 depth=standard + focus=<子问题>。
     """
+    if depth not in ("fast", "standard", "deep"):
+        depth = "fast"
 
     async def generate():
-        yield _sse("start", {"topic": topic})
+        yield _sse("start", {"topic": topic, "depth": depth, "focus": focus})
         report = None
         direct_reply = ""
         try:
             async for chunk in graph.astream(
-                {"topic": topic, "session_id": session_id}, stream_mode="updates"
+                {"topic": topic, "session_id": session_id, "depth": depth, "focus": focus},
+                stream_mode="updates",
             ):
                 for node, delta in chunk.items():
                     payload = {"node": node, "label": NODE_LABELS.get(node, node)}

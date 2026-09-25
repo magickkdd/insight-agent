@@ -100,16 +100,31 @@ def _annotate(report: str, claims: list[Claim]) -> str:
     return report
 
 
-def make_verify_node(llm, verify_enabled: bool, max_claims: int, concurrency: int, pool, card_store=None):
+def make_verify_node(llm, verify_enabled: bool | str, max_claims: int, concurrency: int, pool, card_store=None):
     """verify 节点工厂。pool 为跨节点共享的 EvidencePool（research_one 写入，verify 读取）。
 
+    verify_enabled 支持两种形态：
+      bool  —— 构建期定死（测试/eval 用）
+      str   —— "true"/"false"/"auto"，auto 时按请求档位判定：fast 跳过（概览要快），
+               standard/deep 开启；档位从 state.depth 读（分级交付）
     card_store 非空时：supported/partial 的 claim 自动转为 FactCard 入长期记忆
     （B→C 架构联动：验证层是记忆层的质检关，规格 §9.3）。
     """
 
+    def _enabled_for(depth: str) -> bool:
+        if verify_enabled is True:
+            return True
+        if verify_enabled is False:
+            return False
+        if verify_enabled == "true":
+            return True
+        if verify_enabled == "false":
+            return False
+        return depth != "fast"  # auto
+
     def verify(state: dict) -> dict:
         report = state.get("report", "")
-        if not verify_enabled:
+        if not _enabled_for(state.get("depth") or "standard"):
             vr = VerificationReport(skipped=True)
             return {"verification": vr.to_dict(), "annotated_report": report}
 

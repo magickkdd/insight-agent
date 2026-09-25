@@ -27,6 +27,9 @@
   .brief { padding: 8px 14px; color: var(--muted); font-size: 13px; }
   #report { margin-top: 20px; background: var(--card); border:1px solid var(--border); border-radius:12px; padding: 8px 20px; white-space: pre-wrap; line-height: 1.75; font-size: 14px; }
   #report a { color: var(--brand); }
+  .drill-tip { color: var(--muted); font-size: 13px; margin: 18px 0 8px; }
+  .drill-btn { display:block; width:100%; text-align:left; margin-bottom:6px; padding:10px 14px; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:10px; font-size:13px; cursor:pointer; }
+  .drill-btn:hover { border-color: var(--brand); }
   #err { color:#c0392b; margin-top:14px; font-size:13px; }
 </style>
 </head>
@@ -78,7 +81,7 @@ function renderMd(md) {
   }).join('');
 }
 
-$('go').onclick = run;
+$('go').onclick = () => run();  // 必须包一层：直接赋值会把 Event 对象当成 focus 参数
 $('topic').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
 
 // 会话标识：localStorage 持久化，同一浏览器的闲聊记忆跨刷新延续
@@ -88,18 +91,38 @@ if (!SESSION) {
   localStorage.setItem('insight_session', SESSION);
 }
 
-function run() {
+let lastTopic = '';   // 概览主题（深入请求沿用，避免用户改了输入框导致跑偏）
+let lastBrief = [];   // 概览提纲（深入按钮的数据源）
+
+function run(focus) {
   if (running) return;
-  const topic = $('topic').value.trim();
+  const isFocus = !!focus;
+  const topic = isFocus ? lastTopic : $('topic').value.trim();
   if (!topic) { $('err').textContent = '请输入研究主题'; return; }
-  $('err').textContent = ''; $('stages').innerHTML = ''; $('report').innerHTML = '';
+  if (!isFocus) { lastTopic = topic; $('report').innerHTML = ''; }
+  $('err').textContent = ''; $('stages').innerHTML = '';
+  const drill = document.getElementById('drill'); if (drill) drill.remove();
   running = true; $('go').disabled = true;
 
-  const es = new EventSource('/api/research/stream?topic=' + encodeURIComponent(topic)
-    + '&session_id=' + encodeURIComponent(SESSION));
+  const hint = document.createElement('div');
+  hint.className = 'brief';
+  hint.textContent = isFocus
+    ? '深入模式：对该子问题联网深读取证 + 逐句核验，约需 1-2 分钟 …'
+    : '概览模式：基于搜索摘要快速出全景报告 …';
+  $('stages').appendChild(hint);
+
+  let url = '/api/research/stream?topic=' + encodeURIComponent(topic)
+    + '&session_id=' + encodeURIComponent(SESSION)
+    + '&depth=' + (isFocus ? 'standard' : 'fast');
+  if (isFocus) url += '&focus=' + encodeURIComponent(focus);
+
+  const es = new EventSource(url);
   es.addEventListener('stage', e => {
     const d = JSON.parse(e.data);
-    if (d.node === 'planner' && d.brief) { window.briefTotal = d.brief.length; window.briefDone = 0; }
+    if (d.node === 'planner' && d.brief) {
+      if (!isFocus) lastBrief = d.brief;
+      window.briefTotal = d.brief.length; window.briefDone = 0;
+    }
     if (d.node === 'research_one') window.briefDone = (window.briefDone || 0) + 1;
     let el = document.querySelector('.stage[data-node="' + d.node + '"]');
     if (!el) { el = addStage(d.label, true); el.dataset.node = d.node; el.dataset.label = d.label; }
@@ -113,7 +136,7 @@ function run() {
     } else {
       finishStage(d.node);
       if (d.detail) el.querySelector('span:last-child').textContent += '（' + d.detail + '）';
-      if (d.node === 'planner' && d.brief) {
+      if (d.node === 'planner' && d.brief && !isFocus) {
         const b = document.createElement('div');
         b.className = 'brief';
         b.textContent = '提纲：' + d.brief.join(' ｜ ');
@@ -122,13 +145,37 @@ function run() {
     }
   });
   es.addEventListener('report', e => {
-    $('report').innerHTML = renderMd(JSON.parse(e.data).markdown);
+    const md = JSON.parse(e.data).markdown;
+    if (isFocus) {
+      $('report').innerHTML += renderMd('\n\n---\n\n## 深入：' + focus + '\n\n' + md);
+    } else {
+      $('report').innerHTML = renderMd(md);
+    }
+    renderDrill();
     es.close(); running = false; $('go').disabled = false;
   });
   es.addEventListener('error', e => {
     if (e.data) { const d = JSON.parse(e.data); $('err').textContent = '出错：' + d.message; }
     es.close(); running = false; $('go').disabled = false;
   });
+}
+
+function renderDrill() {
+  if (!lastBrief.length) return;
+  const div = document.createElement('div');
+  div.id = 'drill';
+  const tip = document.createElement('div');
+  tip.className = 'drill-tip';
+  tip.textContent = '想深入哪一块？点击针对性深读取证（较慢，含逐句核验）：';
+  div.appendChild(tip);
+  lastBrief.forEach(q => {
+    const b = document.createElement('button');
+    b.className = 'drill-btn';
+    b.textContent = q;
+    b.onclick = () => run(q);
+    div.appendChild(b);
+  });
+  $('report').after(div);
 }
 </script>
 </body>

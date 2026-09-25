@@ -142,12 +142,14 @@ def make_gap_analyzer(llm: ChatOpenAI, settings: Settings):
     """迭代深研（UPGRADE_SPEC §10）：评估证据充分度，不足则再派一轮研究。
 
     仅 deep 档启用；MAX_RESEARCH_ROUNDS 是代码不变量，防止长周期失控。
+    档位按请求读 state.depth（分级交付），构建期 settings 只作兜底。
     """
-    max_rounds = 3 if settings.research_depth == "deep" else 1
 
     def gap_analyzer(state: dict) -> dict:
+        depth = state.get("depth") or settings.research_depth
+        max_rounds = 3 if depth == "deep" else 1
         rounds = state.get("rounds", 1)
-        if settings.research_depth != "deep" or rounds >= max_rounds:
+        if depth != "deep" or rounds >= max_rounds:
             return {"rounds": rounds, "brief": []}
         judgement = llm.with_structured_output(GapJudgement).invoke(
             f"研究主题：{state['topic']}\n"
@@ -185,6 +187,10 @@ def make_planner(llm: ChatOpenAI):
     structured = llm.with_structured_output(ResearchBrief)
 
     def planner(state: dict) -> dict:
+        # 分级交付：用户点选"深入"时聚焦单问题，跳过拆解（省一次调用，且精确响应点击）
+        focus = state.get("focus", "")
+        if focus:
+            return {"brief": [focus]}
         digest = state.get("existing_digest", "")
         cards = state.get("fact_cards", [])
         card_hint = (
@@ -230,8 +236,8 @@ def make_research_one(llm: ChatOpenAI, settings: Settings, pool: EvidencePool):
     fast 档：只用搜索摘要（不深读，无 degraded 标记——这是档位的本意）。
     standard/deep 档：搜索 → LLM 选 URL → 并行深读 → 语义检索相关段落 → 成文；
     深读全败时降级回摘要模式并打 ⚠degraded 标记。
+    档位按请求读 state.depth（分级交付：概览 fast、深入 standard）。
     """
-    max_docs = DEPTH_MAX_DOCS[settings.research_depth]
     from insight_agent.tools.search_router import (
         BochaProvider,
         DuckDuckGoProvider,
@@ -254,6 +260,8 @@ def make_research_one(llm: ChatOpenAI, settings: Settings, pool: EvidencePool):
         ]
 
     def research_one(state: dict) -> dict:
+        depth = state.get("depth") or settings.research_depth
+        max_docs = DEPTH_MAX_DOCS[depth]
         question = state["question"]
         snippets = _search(question)
         if not snippets:
@@ -282,7 +290,7 @@ def make_research_one(llm: ChatOpenAI, settings: Settings, pool: EvidencePool):
             mode_prompt = "以下为网页正文段落（深读证据）。基于段落原文撰写证据笔记，每条事实标注 [来源N](url)。"
         else:
             context = "\n\n".join(f"来源：{s['url']}\n摘要：{s['snippet']}" for s in snippets)
-            if settings.research_depth == "fast":
+            if depth == "fast":
                 mode_prompt = "以下为搜索摘要。基于摘要撰写证据笔记，每条事实标注 [来源N](url)。"
             else:
                 degraded = degraded or len(snippets)
