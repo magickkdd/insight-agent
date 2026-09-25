@@ -111,29 +111,77 @@ def make_gate(llm: ChatOpenAI, settings: Settings, chats=None):
     return gate
 
 
-def make_smalltalk(llm: ChatOpenAI, chats=None):
-    """闲聊直答节点：不走研究流水线，带上会话历史对话（有记忆的金鱼）。"""
+QUERY_HINTS = ("查", "搜", "找", "推荐", "新闻", "热点", "最近", "了解", "看看")
+
+
+def _looks_like_query(text: str) -> bool:
+    """规则判定：输入是否带查询意图（命中才值得在闲聊分支花一次联网搜索）。"""
+    return any(k in text for k in QUERY_HINTS)
+
+
+def make_smalltalk(llm: ChatOpenAI, chats=None, settings: Settings | None = None):
+    """闲聊直答节点：不走研究流水线，带上会话历史对话（有记忆的金鱼）。
+
+    先搜后答：输入带查询意图（"帮我查一下最近很火的那个xx"）时先联网搜一轮，
+    把结果塞进 prompt —— 能对上就点名附来源，对不上再反问澄清。
+    纯寒暄（"你好"）不搜，照旧零额度。
+    """
+    router = None
+    if settings is not None:
+        from insight_agent.tools.search_router import (
+            BochaProvider,
+            DuckDuckGoProvider,
+            SearchRouter,
+            TavilyProvider,
+        )
+
+        providers = [TavilyProvider(settings.tavily_api_key)]
+        if settings.bocha_api_key:
+            providers.append(BochaProvider(settings.bocha_api_key))
+        providers.append(DuckDuckGoProvider())
+        router = SearchRouter(providers)
 
     def smalltalk(state: dict) -> dict:
         sid = state.get("session_id", "web")
-        messages = [
-            (
-                "system",
-                "你是 Insight Agent 助手。用户没有提出研究请求，"
-                "请友好简短地回复，并提示：想生成研究报告可以输入一个具体主题。\n"
-                f"当前日期：{_today()}。问今天日期/星期几时按这个日期回答，"
-                "不要凭记忆猜。",
+        topic = state["topic"]
+        # 先搜后答：查询意图 → 联网一轮；搜索失败退回纯记忆澄清（辅助能力不拦主流程）
+        search_block, searched = "", False
+        if router is not None and _looks_like_query(topic):
+            try:
+                batch = router.search(topic, max_results=5)
+                if batch.results:
+                    searched = True
+                    lines = [f"- {r.title}：{r.snippet}（{r.url}）" for r in batch.results]
+                    search_block = "\n\n刚联网搜到的参考结果：\n" + "\n".join(lines)
+            except Exception:  # noqa: BLE001
+                search_block, searched = "", False
+
+        system = (
+            "你是 Insight Agent 助手。用户没有提出正式研究请求，请友好简短地回复。\n"
+            f"当前日期：{_today()}。问今天日期/星期几时按这个日期回答，不要凭记忆猜。\n"
+        )
+        if searched:
+            system += (
+                "用户的话带着查询意图但对象可能模糊。优先依据刚搜到的参考结果回答："
+                "能对上的直接点名介绍并附来源链接 [标题](url)；"
+                "对不上就列出候选并反问澄清，不要凭记忆硬猜。"
             )
-        ]
+        else:
+            system += (
+                "如果用户似乎想查什么但说不清，给出候选并提示："
+                "输入一个具体主题可以生成研究报告。"
+            )
+
+        messages = [("system", system)]
         if chats is not None:
             for t in chats.load(sid):
                 messages.append(("user", t["user"]))
                 messages.append(("assistant", t["assistant"]))
-        messages.append(("user", state["topic"]))
+        messages.append(("user", f"{topic}{search_block}" if search_block else topic))
         result = llm.invoke(messages)
         if chats is not None:
-            chats.append(sid, state["topic"], str(result.content))
-        return {"direct_reply": result.content}
+            chats.append(sid, topic, str(result.content))
+        return {"direct_reply": result.content, "searched": searched}
 
     return smalltalk
 

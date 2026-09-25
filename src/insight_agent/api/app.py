@@ -85,7 +85,8 @@ async def research_stream(
                     if node == "smalltalk":
                         direct_reply = delta.get("direct_reply", "")
                         payload["chars"] = len(direct_reply)
-                        payload["detail"] = f"回复 {len(direct_reply)} 字"
+                        prefix = "联网核查后回复" if delta.get("searched") else "回复"
+                        payload["detail"] = f"{prefix} {len(direct_reply)} 字"
                     if node == "recall":
                         notes = delta.get("existing_notes", "")
                         cards = delta.get("fact_cards", [])

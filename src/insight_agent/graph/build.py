@@ -73,7 +73,7 @@ def build_research_graph(
 
     builder = StateGraph(ResearchState)
     builder.add_node("gate", make_gate(llm, cfg, chat_store))
-    builder.add_node("smalltalk", make_smalltalk(llm, chat_store))
+    builder.add_node("smalltalk", make_smalltalk(llm, chat_store, cfg))
     builder.add_node("recall", make_recall(store, card_store))
     builder.add_node("planner", make_planner(llm))
     builder.add_node("research_one", make_research_one(llm, cfg, pool))
