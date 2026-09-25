@@ -42,6 +42,7 @@ def build_research_graph(
 ) -> CompiledStateGraph:
     from insight_agent.config import load_settings
     from insight_agent.graph.verify import make_verify_node
+    from insight_agent.memory.evidence_pool import EvidencePool
     from insight_agent.memory.fact_cards import FactCardStore
     from insight_agent.tools.embedder import get_embedder_cached
 
