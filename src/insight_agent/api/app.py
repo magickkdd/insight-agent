@@ -72,18 +72,47 @@ async def research_stream(
                 for node, delta in chunk.items():
                     payload = {"node": node, "label": NODE_LABELS.get(node, node)}
                     if node == "gate":
-                        payload["is_research"] = delta.get("is_research", True)
+                        is_research = delta.get("is_research", True)
+                        payload["is_research"] = is_research
                         payload["reason"] = delta.get("gate_reason", "")
+                        payload["detail"] = ("研究请求" if is_research else "闲聊直答") + " · " + payload["reason"]
                     if node == "smalltalk":
                         direct_reply = delta.get("direct_reply", "")
                         payload["chars"] = len(direct_reply)
+                        payload["detail"] = f"回复 {len(direct_reply)} 字"
+                    if node == "recall":
+                        notes = delta.get("existing_notes", "")
+                        cards = delta.get("fact_cards", [])
+                        detail = "命中 %d 字历史档案" % len(notes) if notes else "无历史档案，从头研究"
+                        if cards:
+                            detail += f" · 召回 {len(cards)} 条相关事实卡"
+                        payload["detail"] = detail
                     if node == "planner":
                         payload["brief"] = delta.get("brief", [])
                     if node == "research_one":
                         payload["chars"] = sum(len(f) for f in delta.get("findings", []))
+                    if node == "compress":
+                        payload["detail"] = f"压缩后 {len(delta.get('compressed_findings', ''))} 字"
+                    if node == "gap_analyzer":
+                        more = delta.get("brief", [])
+                        payload["detail"] = (
+                            f"证据不足，追加 {len(more)} 个子问题再取证" if more else "证据充分，进入撰写"
+                        )
                     if node == "writer":
                         report = delta.get("report", "")
                         payload["chars"] = len(report)
+                        payload["detail"] = f"报告 {len(report)} 字"
+                    if node == "verify":
+                        v = delta.get("verification", {})
+                        parts = []
+                        if v.get("hallucination_rate") is not None:
+                            parts.append(f"幻觉率 {v['hallucination_rate']:.1%}")
+                        if v.get("score") is not None:
+                            parts.append(f"可信度 {v['score']}")
+                        if parts:
+                            payload["detail"] = " · ".join(parts)
+                    if node == "archive":
+                        payload["detail"] = "已写入笔记库与报告目录"
                     yield _sse("stage", payload)
             yield _sse("report", {"markdown": report or direct_reply or ""})
         except Exception as e:  # noqa: BLE001 - 流里炸了也要把错误推给前端

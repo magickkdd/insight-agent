@@ -112,14 +112,12 @@ function run() {
       if (window.briefDone >= window.briefTotal) finishStage(d.node);
     } else {
       finishStage(d.node);
+      if (d.detail) el.querySelector('span:last-child').textContent += '（' + d.detail + '）';
       if (d.node === 'planner' && d.brief) {
         const b = document.createElement('div');
         b.className = 'brief';
         b.textContent = '提纲：' + d.brief.join(' ｜ ');
         $('stages').appendChild(b);
-      }
-      if (d.node === 'writer' && d.chars) {
-        el.querySelector('span:last-child').textContent += '（' + d.chars + ' 字）';
       }
     }
   });
