@@ -1,14 +1,14 @@
 # Insight Agent · 行业洞察研究助手
 
 基于 **LangGraph 官方组件**构建的可验证研究 Agent：输入一个主题，自动完成
-**规划 → 多源搜索 → 深读网页 → 并行取证 → 逐句核验 → 结构化报告**，
+**规划 → 多源搜索 → 深读网页 → 并行取证 → 结构化报告 → 逐句核验 → 对抗审查**，
 带长期语义记忆、成本档位与标准版评测基准。
 
 > 求职作品集项目。姊妹项目 [agent-framework](https://github.com/magickkdd/agent-framework)
 > 是从零手写的教学版框架（State 通道 / Tool Registry / 三层记忆 / 评测门禁），
 > 本项目是"理解原理之后，用成熟框架快速交付"的工程实践。
 
-## 架构（八节点 + 两个横切层）
+## 架构（九节点 + 两个横切层）
 
 ```
 topic
@@ -23,10 +23,12 @@ compress      超长证据 LLM 摘要压缩（上下文工程）
   ↓
 gap_analyzer  证据充分度判定：不足且轮数未满 → 再派一轮（deep 档，MAX_ROUNDS 不变量）
   ↓
-writer        结构化报告（引用纪律：禁止丢链接、禁止编造）
+writer        结构化报告（引用纪律：禁止丢链接、禁止编造）；被红队打回时按 issues 定点修订
   ↓
 verify        逐句核验：claim 与证据段比对 → 幻觉率 / 可信度评分 / ⚠️ 标注版
   ↓
+redteam       报告级对抗审查：证据真实性/逻辑一致性/覆盖面三维出质 → 有 blocker 打回 writer
+  ↓           轮数预算耗尽则带 ⚠️ 降级归档（verdict 保持 revise，不粉饰成 pass）
 archive       双版本报告落盘 + 证据入档案库 + supported claim 转事实卡片
 ```
 
@@ -48,10 +50,13 @@ archive       双版本报告落盘 + 证据入档案库 + supported claim 转�
    输出幻觉率数字与 ⚠️ 标注版 —— "Agent 能量化自己有多可信"
 2. **验证层是记忆层的质检关**：只有核验通过（supported/partial）的事实才转成
    FactCard 进长期语义记忆（sqlite-vec 向量检索，跨主题召回，重复报道自动 superseded）
-3. **标准版评测基准**（`eval/`）：35 条用例分 unit/e2e 两层；
+3. **对抗审查与修订闭环**：独立的红队 Agent 站在客户立场出质（证据真实性/逻辑一致性/覆盖面），
+   判定规则写死在代码里而非交给模型裁量；有 blocker 打回 writer 定点修订，轮数预算耗尽则
+   带 ⚠️ 降级归档且 verdict 保持 revise —— **失败不粉饰**
+4. **标准版评测基准**（`eval/`）：36 条用例分 unit/e2e 两层；
    四维指标 = 成功率（结构断言 + LLM 多票 judge）/ Token（官方 Usage 回调）/ 时延 / **回归**（自动 diff 上次报告）
-4. **多智能体并行**：planner + N 个并行研究工人 + writer，LangGraph Send map-reduce
-5. **降级哲学**：搜索三家熔断、抓取六态、嵌入三档、验证失败不拦交付 —— 每个外部依赖都有退路且显式标注
+5. **多智能体并行**：planner + N 个并行研究工人 + writer，LangGraph Send map-reduce
+6. **降级哲学**：搜索三家熔断、抓取六态、嵌入三档、验证失败不拦交付 —— 每个外部依赖都有退路且显式标注
 
 ## 快速开始
 
@@ -77,11 +82,11 @@ MCP 接入（Claude Code 配置示例）：
 
 ## 成本档位
 
-| 档位 | 深读篇数/子问题 | 验证层 | 迭代深研 | 适用 |
-|---|---|---|---|---|
-| fast | 0（只用摘要） | 关 | 关 | 快速迭代、额度紧张 |
-| standard | 2 | 开 | 关 | 日常使用 |
-| deep | 5 | 开 | 开（MAX_ROUNDS=3） | 高质量交付 |
+| 档位 | 深读篇数/子问题 | 验证层 | 对抗审查 | 迭代深研 | 适用 |
+|---|---|---|---|---|---|
+| fast | 0（只用摘要） | 关 | 关 | 关 | 快速迭代、额度紧张 |
+| standard | 2 | 开 | 关 | 关 | 日常使用 |
+| deep | 5 | 开 | 开（默认只审不修，`REDTEAM_MAX_ROUNDS=2` 起打回修订） | 开（MAX_ROUNDS=3） | 高质量交付 |
 
 `RESEARCH_DEPTH=deep uv run ...` 或 `--depth deep` 切换。
 
@@ -92,10 +97,12 @@ uv run python -m insight_agent.eval --tier unit   # 快速回归（分钟级）
 uv run python -m insight_agent.eval --tier e2e    # 全流水线基准（含幻觉率）
 ```
 
-35 条用例（12 planner + 10 writer + 13 e2e/golden set）。
-报告含**幻觉率**列、judge 多票一致率、与上次运行的回归 diff。
+36 条用例（12 planner + 10 writer + 1 redteam golden fixture + 13 e2e/golden set）。
+报告含**幻觉率**列、对抗审查判定列、judge 多票一致率、与上次运行的回归 diff。
 评测上线期间实测抓到并修复 4 个缺陷：Token 计量失效、planner 提纲数违规、
-writer 引用丢 URL、trafilatura 2.x API 变更 —— 详见 `eval/runs/report_*.md`。
+writer 引用丢 URL、trafilatura 2.x API 变更；redteam 落地时 Token 计量因
+langchain-core 1.x 的 `bind(callbacks=)` 变更再次失效，改为实例级回调挂载（`with_llm_callbacks`）
+—— 详见 `eval/runs/report_*.md`。
 
 ## Docker
 

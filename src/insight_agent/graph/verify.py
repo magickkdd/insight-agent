@@ -158,7 +158,8 @@ def make_verify_node(llm, verify_enabled: bool | str, max_claims: int, concurren
         vr = VerificationReport(claims=claims)
 
         # B→C 联动：核对通过的事实进长期记忆（事实卡片）
-        if card_store is not None:
+        # redteam 打回修订后 verify 会二次进入，同 claim 同 URL 会生成重复卡片污染召回 → 只在首轮入卡
+        if card_store is not None and not state.get("redteam_rounds"):
             from insight_agent.memory.fact_cards import FactCard
 
             for c in claims:

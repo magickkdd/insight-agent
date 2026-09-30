@@ -1,9 +1,10 @@
 """组装带记忆的并行研究流水线。
 
-拓扑（M7 两个模式的组合：routing + parallelization）：
+拓扑（M7 两个模式的组合：routing + parallelization + redteam 修订闭环）：
 
-  START → recall → planner ──┬─ Send×N → research_one(并行) → compress ─┬→ writer → archive → END
-                             └────────（无增量时）──────────────────────┘
+  START → recall → planner ──┬─ Send×N → research_one(并行) → compress ─┬→ writer → verify → redteam ─┬─ pass ─→ archive → END
+                             └────────（无增量时）──────────────────────┘                              ├─ revise 且轮数未满 → writer（带 issues 修订）
+                                                                                                      └─ revise 且轮数耗尽 → archive（降级标注）
 
 research_one 的 N 个实例由 LangGraph Send（map-reduce）并行拉起，
 全部完成后才进入 compress（superstep 自动屏障）。
@@ -45,6 +46,14 @@ def route_after_gate(state: dict):
     return "smalltalk"
 
 
+def route_after_redteam(state: dict):
+    """审查判定权在 redteam 节点（它持有轮数上限），条件边只读决策结果：
+    revise=打回 writer 修订；degrade=轮数耗尽降级归档；review=放行。"""
+    if (state.get("redteam") or {}).get("action") == "revise":
+        return "writer"
+    return "archive"
+
+
 def build_research_graph(
     llm: ChatOpenAI,
     notes_store: NotesStore | None = None,
@@ -54,6 +63,8 @@ def build_research_graph(
     """chat_store（ChatHistoryStore）只服务闲聊分支的对话记忆；
     传 None 时 gate/smalltalk 退化为无记忆行为（eval 等单轮场景够用）。"""
     from insight_agent.config import load_settings
+    from insight_agent.graph.llm_factory import get_llm
+    from insight_agent.graph.redteam import make_redteam_node
     from insight_agent.graph.verify import make_verify_node
     from insight_agent.memory.evidence_pool import EvidencePool
     from insight_agent.memory.fact_cards import FactCardStore
@@ -71,6 +82,11 @@ def build_research_graph(
     # verify 开关原始值传给节点：auto 档在运行时按请求 depth 判定（概览 fast 跳过验证）
     verify_flag = cfg.verify_enabled
 
+    # redteam 审查走强模型（REDTEAM_SPEC §3：对抗审查的质量下限比成本更敏感）——
+    # cloud/hybrid 档复用主 LLM（hybrid 语义下 redteam 不像 judge 那样降本地）；
+    # 仅 local 档借 judge 通道取本地模型（离线演示场景）
+    redteam_llm = llm if cfg.redteam_profile in ("cloud", "hybrid") else get_llm("judge", cfg)
+
     builder = StateGraph(ResearchState)
     builder.add_node("gate", make_gate(llm, cfg, chat_store))
     builder.add_node("smalltalk", make_smalltalk(llm, chat_store, cfg))
@@ -84,6 +100,7 @@ def build_research_graph(
         "verify",
         make_verify_node(llm, verify_flag, cfg.verify_max_claims, cfg.verify_concurrency, pool, card_store),
     )
+    builder.add_node("redteam", make_redteam_node(redteam_llm, cfg, pool))
     builder.add_node("archive", make_archive(store))
 
     builder.add_edge(START, "gate")
@@ -95,6 +112,7 @@ def build_research_graph(
     builder.add_edge("compress", "gap_analyzer")
     builder.add_conditional_edges("gap_analyzer", route_after_planner)
     builder.add_edge("writer", "verify")
-    builder.add_edge("verify", "archive")
+    builder.add_edge("verify", "redteam")
+    builder.add_conditional_edges("redteam", route_after_redteam)
     builder.add_edge("archive", END)
     return builder.compile()

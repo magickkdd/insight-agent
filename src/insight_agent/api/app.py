@@ -36,6 +36,7 @@ NODE_LABELS = {
     "compress": "压缩证据笔记",
     "writer": "撰写结构化报告",
     "verify": "逐句核验可信度",
+    "redteam": "对抗审查报告",
     "archive": "归档到笔记库",
 }
 
@@ -170,6 +171,19 @@ async def research_stream(
                             parts.append(f"可信度 {v['score']}")
                         if parts:
                             payload["detail"] = " · ".join(parts)
+                    if node == "redteam":
+                        v = delta.get("redteam", {})
+                        if v.get("skipped"):
+                            payload["detail"] = "非 deep 档，跳过对抗审查"
+                        elif v.get("error"):
+                            payload["detail"] = "审查调用异常，不拦交付"
+                        else:
+                            act = {"revise": "打回 writer 修订", "degrade": "轮数耗尽，降级归档"}.get(
+                                v.get("action"), "放行归档"
+                            )
+                            payload["detail"] = (
+                                f"判定 {v.get('verdict')} · {v.get('blocker_count', 0)} 个 blocker · {act}"
+                            )
                     if node == "archive":
                         payload["detail"] = "已写入笔记库与报告目录"
                     yield _sse("stage", payload)

@@ -54,6 +54,17 @@ def reset_llm_cache() -> None:
     get_llm.cache_clear()
 
 
+def with_llm_callbacks(llm: ChatOpenAI, callbacks: list) -> ChatOpenAI:
+    """返回额外挂了回调的同配置副本（评测 token 计量用）。
+
+    为什么不用 llm.bind(callbacks=[h])：langchain-core 1.x 的 ChatOpenAI.invoke 会把
+    config.callbacks 和 bound kwargs 各传一次给 generate_prompt，纯 invoke 路径直接
+    TypeError；而 with_structured_output 走 RunnableBinding.__getattr__ 代理回原实例，
+    绑定层回调被整个丢掉（静默计成 0）。实例级 callbacks 两条路径都能覆盖。
+    """
+    return llm.model_copy(update={"callbacks": list(llm.callbacks or []) + list(callbacks)})
+
+
 def get_judge_config(settings: Settings) -> tuple[str, str, str]:
     """judge 的 (base_url, api_key, model)：hybrid/local 走本地，cloud 走云端。"""
     if settings.llm_profile in ("local", "hybrid"):

@@ -371,19 +371,42 @@ def make_compress(llm: ChatOpenAI):
     return compress
 
 
-def make_writer(llm: ChatOpenAI):
+def make_writer(llm: ChatOpenAI, revision_notes: str | None = None):
+    """revision_notes 非空时注入"上一轮审查意见"（redteam 修订闭环，REDTEAM_SPEC §4）：
+    构建期传固定值供 eval/单测驱动修订路径；graph 运行时从 state.redteam 的 issues 现算。
+    只修订被质疑的段落，保留引用格式——不做全文重写（省额度且避免引入新问题）。
+    """
+
+    def _revision_from_state(state: dict) -> str:
+        rt = state.get("redteam") or {}
+        if rt.get("verdict") != "revise" or not rt.get("issues"):
+            return ""
+        return "\n".join(
+            f"- [{i['dimension']}/{i['severity']}] 「{i['quote']}」：{i['reason']}"
+            for i in rt["issues"]
+        )
+
     def writer(state: dict) -> dict:
         existing = state.get("existing_notes", "")
         fresh = state.get("compressed_findings", "")
         evidence = (
             f"{existing}\n\n## 本轮新证据\n\n{fresh}" if existing else fresh
         )
+        notes = revision_notes if revision_notes is not None else _revision_from_state(state)
+        revision_block = ""
+        if notes:
+            revision_block = (
+                "\n\n上一轮对抗审查意见（必须逐条处理）：\n"
+                f"{notes}\n"
+                "修订要求：只修订被质疑的段落，其余内容原样保留；"
+                "保留 [来源N](url) 引用格式，不得为平息质疑删除引用。"
+            )
         result = llm.invoke(
             [
                 ("system", WRITER_SYSTEM),
                 (
                     "user",
-                    f"主题：{state['topic']}\n当前日期：{_today()}\n\n证据笔记：\n{evidence}",
+                    f"主题：{state['topic']}\n当前日期：{_today()}\n\n证据笔记：\n{evidence}{revision_block}",
                 ),
             ]
         )

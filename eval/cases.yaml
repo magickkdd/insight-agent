@@ -1,4 +1,4 @@
-# Insight Agent 评测用例集（标准版：12 planner + 10 writer + 8 e2e = 30 条）
+# Insight Agent 评测用例集（12 planner + 10 writer + 1 redteam + 13 e2e/golden = 36 条）
 # unit 层：单节点，1-2 次 LLM 调用/条，回归常用
 # e2e 层：全流水线，分钟级/条，按需或夜间跑
 
@@ -201,6 +201,44 @@
   expect:
     contains_all: ["## 核心发现", "## 详细分析"]
     min_links: 2
+
+# ============ redteam 对抗审查（T2 golden fixture，REDTEAM_SPEC §5）============
+# 证据池预置一条无出处的编造数字 + 一对相互矛盾的结论。
+# 判据不信任模型自述：verdict=revise 且 issues 的 dimension/quote 必须命中注入内容。
+# 矛盾对两条结论各自都有真实出处（45% 见年报 / 不足20% 见新闻），只能被判为 logic 而非 evidence。
+# 审查判定有跨轮抖动（SPEC §9.2 实测：单票 3 跑 1 绿），故本条按 3 票取 issues 并集后做结构化断言；
+# logic 提示词收紧 + 矛盾对改用 quote_any 后，连跑 4 次 4/4 绿。
+
+- id: redteam-golden-fabrication-001
+  tier: unit
+  node: redteam
+  topic: "智能传感器市场"
+  redteam_votes: 3
+  report: |
+    # 智能传感器市场研究报告
+
+    ## 核心发现
+
+    - 2026年该市场规模达4.8亿元，同比增长35% [来源3](https://fabricated.example.com/x)。
+    - A 公司市场份额达45%，位居行业第一 [来源1](https://eval-source-1.example/report)。
+    - A 公司市场份额不足20%，行业排名第四 [来源2](https://eval-source-2.example/news)。
+
+    ## 详细分析
+
+    年报口径与第三方监测口径并存，本报告未加区分地并列引用。
+  pool_evidence: |
+    https://eval-source-1.example/report
+    据行业协会年报，2026年该市场规模为2.4亿元，同比增长8%；A 公司以45%的份额位居行业第一。
+
+    ---
+
+    https://eval-source-2.example/news
+    第三方监测报道：A 公司市场份额不足20%，行业排名第四，头部三家厂商合计份额约60%。
+  expect:
+    redteam_verdict: revise
+    redteam_dimensions: ["evidence", "logic"]
+    redteam_quote_hits: ["4.8"]          # 编造数字必须被逐字引用
+    redteam_quote_any: ["45%", "20%", "第一", "第四"]  # 矛盾对只摘其中一侧，任一侧被摘即算命中
 
 # ============ e2e 全流水线（8 条）============
 

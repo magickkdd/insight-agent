@@ -35,6 +35,8 @@ class CaseResult:
     output_chars: int = 0
     hallucination_rate: float | None = None  # 模块 B 验证层产出（e2e）
     claim_score: float | None = None
+    redteam_verdict: str | None = None       # 对抗审查层产出（REDTEAM_SPEC T2/T3/T4 取证）
+    redteam_blockers: int | None = None
 
 
 @dataclass
@@ -44,9 +46,10 @@ class CaseOutput:
     text: str
 
 
-def _score(case: EvalCase, output: str, sub_questions: list[str], latency: float) -> list[dict]:
+def _score(case: EvalCase, output: str, sub_questions: list[str], latency: float, redteam: dict | None = None) -> list[dict]:
     checks: list[dict] = []
     e = case.expect
+    redteam = redteam or {}
 
     if e.sub_questions_min is not None:
         ok = len(sub_questions) >= e.sub_questions_min
@@ -66,6 +69,26 @@ def _score(case: EvalCase, output: str, sub_questions: list[str], latency: float
         checks.append({"name": "min_links", "passed": n >= e.min_links, "detail": f"来源链接 {n} 个 ≥ {e.min_links}"})
     if e.max_latency_s is not None:
         checks.append({"name": "max_latency_s", "passed": latency <= e.max_latency_s, "detail": f"时延 {latency:.0f}s ≤ {e.max_latency_s}s"})
+    if e.redteam_verdict:
+        got = redteam.get("verdict")
+        checks.append({"name": "redteam_verdict", "passed": got == e.redteam_verdict,
+                       "detail": f"审查判定 {got} == {e.redteam_verdict}"})
+    if e.redteam_dimensions:
+        dims = {i.get("dimension") for i in redteam.get("issues", [])}
+        missing = [d for d in e.redteam_dimensions if d not in dims]
+        checks.append({"name": "redteam_dimensions", "passed": not missing,
+                       "detail": f"issues 维度命中 {sorted(dims)}，缺 {missing}" if missing else f"维度 {e.redteam_dimensions} 全命中"})
+    if e.redteam_quote_hits:
+        issues = redteam.get("issues", [])
+        quotes = "\n".join(i.get("quote", "") for i in issues)
+        missing = [q for q in e.redteam_quote_hits if q not in quotes]
+        checks.append({"name": "redteam_quote_hits", "passed": not missing,
+                       "detail": f"quote 未命中 {missing}（quote 定位失败会被丢弃）" if missing else "注入内容全部被定位"})
+    if e.redteam_quote_any:
+        quotes = "\n".join(i.get("quote", "") for i in redteam.get("issues", []))
+        hit = [q for q in e.redteam_quote_any if q in quotes]
+        checks.append({"name": "redteam_quote_any", "passed": bool(hit),
+                       "detail": f"quote 命中 {hit}" if hit else f"quote 全部未命中 {e.redteam_quote_any}"})
     if e.key_points:
         # golden set 要点覆盖率："|"分隔同义写法，命中任一算覆盖（规格 §3.3）
         covered = sum(
@@ -79,28 +102,74 @@ def _score(case: EvalCase, output: str, sub_questions: list[str], latency: float
     return checks
 
 
-def _invoke_case(case: EvalCase, settings, store_root: Path, handler) -> tuple[str, list[str], dict, dict]:
-    """按层执行被测对象，返回 (输出文本, 提纲, token 总量, verification)。
+def _invoke_case(case: EvalCase, settings, store_root: Path, handler) -> tuple[str, list[str], dict, dict, dict]:
+    """按层执行被测对象，返回 (输出文本, 提纲, token 总量, verification, redteam)。
 
-    关键：每条用例构造专属 LLM 实例，回调挂进构造函数 ——
-    实例回调自动传播到它的所有调用（含 with_structured_output
-    和 researcher 子 agent），无需层层穿 config。
+    关键：每条用例构造专属 LLM 实例，计量回调挂实例（不是 bind）——
+    实例回调会自动传播到它的所有调用（含 with_structured_output 和
+    researcher 子 agent），无需层层穿 config；bind 在 langchain-core 1.x 下会丢。
     """
-    from insight_agent.graph.llm_factory import get_llm
+    import dataclasses
+
+    from insight_agent.graph.llm_factory import get_llm, with_llm_callbacks
     from insight_agent.graph.nodes import make_planner, make_writer
     from insight_agent.graph.build import build_research_graph
     from insight_agent.memory.notes import NotesStore
 
-    llm = get_llm("main", settings).bind(callbacks=[handler])
+    llm = with_llm_callbacks(get_llm("main", settings), [handler])
 
     if case.node == "planner":
         out = make_planner(llm)({"topic": case.topic, "existing_digest": case.existing_digest})
-        return "", out["brief"], summarize_tokens(handler), {}
+        return "", out["brief"], summarize_tokens(handler), {}, {}
     if case.node == "writer":
         out = make_writer(llm)(
             {"topic": case.topic, "existing_notes": "", "compressed_findings": case.evidence}
         )
-        return out["report"], [], summarize_tokens(handler), {}
+        return out["report"], [], summarize_tokens(handler), {}, {}
+    if case.node == "redteam":
+        # T2 golden fixture：预置证据池 + 被审报告，审查判定不信任模型自述，
+        # 断言全走结构化 checks（verdict/dimension/quote 命中注入内容）
+        from insight_agent.graph.redteam import make_redteam_node
+        from insight_agent.memory.evidence_pool import EvidencePool
+        from insight_agent.tools.chunker import chunk_text
+        from insight_agent.tools.embedder import get_embedder_cached
+
+        pool = EvidencePool()
+        pool.bind_embedder(get_embedder_cached(settings))
+        for doc in case.pool_evidence.split("\n---\n"):
+            lines = [ln.strip() for ln in doc.strip().splitlines() if ln.strip()]
+            if len(lines) >= 2:
+                pool.add_chunks(chunk_text(lines[0], "\n".join(lines[1:])))
+        cfg = dataclasses.replace(settings, redteam_enabled="true")  # 用例即被审对象，强制启用
+        node = make_redteam_node(llm, cfg, pool)
+        # 审查判定有跨轮抖动（SPEC §9.2）：同一输入跑 N 次，issues 取并集、任一轮 revise 即算 revise
+        votes, verdicts, union, seen = max(1, case.redteam_votes), [], [], set()
+        for _ in range(votes):
+            rd = node(
+                {
+                    "topic": case.topic,
+                    "report": case.report,
+                    "annotated_report": case.report,
+                    "verification": {},
+                    "brief": [],
+                    "redteam_rounds": 0,
+                    "depth": "deep",
+                }
+            )["redteam"]
+            verdicts.append(rd["verdict"])
+            for i in rd["issues"]:
+                key = (i["dimension"], i["quote"])
+                if key not in seen:
+                    seen.add(key)
+                    union.append(i)
+        out = {
+            "verdict": "revise" if "revise" in verdicts else "pass",
+            "issues": union,
+            "blocker_count": sum(1 for i in union if i["severity"] == "blocker"),
+            "votes": votes,
+            "vote_verdicts": verdicts,
+        }
+        return case.report, [], summarize_tokens(handler), {}, out
     # e2e：全流水线
     graph = build_research_graph(llm, notes_store=NotesStore(store_root / "e2e_notes"), settings=settings)
     result = graph.invoke({"topic": case.topic}, config={"callbacks": [handler]})
@@ -109,6 +178,7 @@ def _invoke_case(case: EvalCase, settings, store_root: Path, handler) -> tuple[s
         result["brief"],
         summarize_tokens(handler),
         result.get("verification", {}),
+        result.get("redteam", {}),
     )
 
 
@@ -116,14 +186,14 @@ def run_case(case: EvalCase, settings, judge_client: OpenAI | None, judge_model:
     t0 = time.perf_counter()
     handler = UsageMetadataCallbackHandler()
     try:
-        output, sub_questions, tokens, verification = _invoke_case(case, settings, store_root, handler)
+        output, sub_questions, tokens, verification, redteam = _invoke_case(case, settings, store_root, handler)
     except RateLimitError as e:
         return CaseResult(case.id, case.tier, False, [], {}, time.perf_counter() - t0, "rate_limit", f"API 限流：{str(e)[:100]}")
     except Exception as e:  # noqa: BLE001
         return CaseResult(case.id, case.tier, False, [], {}, time.perf_counter() - t0, "exception", f"{type(e).__name__}: {e}")
 
     latency = time.perf_counter() - t0
-    checks = _score(case, output, sub_questions, latency)
+    checks = _score(case, output, sub_questions, latency, redteam)
     if case.judge and judge_client is not None:
         # e2e 层用多票制（规格 §3.2），unit 层单票省额度
         if case.tier == "e2e":
@@ -141,4 +211,6 @@ def run_case(case: EvalCase, settings, judge_client: OpenAI | None, judge_model:
         output_chars=len(output),
         hallucination_rate=verification.get("hallucination_rate"),
         claim_score=verification.get("score"),
+        redteam_verdict=redteam.get("verdict"),
+        redteam_blockers=redteam.get("blocker_count"),
     )

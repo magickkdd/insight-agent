@@ -23,6 +23,11 @@ class Settings:
     verify_enabled: str = "auto"          # auto | true | false（auto = standard/deep 开）
     verify_max_claims: int = 30
     verify_concurrency: int = 4
+    # ---- 对抗审查层（REDTEAM_SPEC §3）----
+    redteam_enabled: str = "auto"         # auto | true | false（auto = 仅 deep 档启用）
+    redteam_max_rounds: int = 1           # 审查轮数预算（含首轮）：默认 1 = 只审不修，n 则允许 n-1 次修订
+    redteam_profile: str = "hybrid"       # cloud | hybrid | local（hybrid 语义：审查走强模型）
+    redteam_max_issues: int = 10          # 单轮 issues 截断上限（控成本 + 防 prompt 爆炸）
     bocha_api_key: str = ""               # 博查搜索（国内直连，可选）
     # ---- 模型档位（规格 §7：cloud | local | hybrid）----
     llm_profile: str = "cloud"
@@ -44,6 +49,14 @@ def load_settings(env_path: str = ".env") -> Settings:
     depth = os.environ.get("RESEARCH_DEPTH", "standard")
     if depth not in ("fast", "standard", "deep"):
         raise RuntimeError(f"RESEARCH_DEPTH 非法: {depth}（fast/standard/deep）")
+    redteam_enabled = os.environ.get("REDTEAM_ENABLED", "auto")
+    if redteam_enabled not in ("auto", "true", "false"):
+        raise RuntimeError(f"REDTEAM_ENABLED 非法: {redteam_enabled}（auto/true/false）")
+    redteam_profile = os.environ.get("REDTEAM_PROFILE", "hybrid")
+    if redteam_profile not in ("cloud", "hybrid", "local"):
+        raise RuntimeError(f"REDTEAM_PROFILE 非法: {redteam_profile}（cloud/hybrid/local）")
+    if int(os.environ.get("REDTEAM_MAX_ROUNDS", "1")) < 1:
+        raise RuntimeError("REDTEAM_MAX_ROUNDS 必须 ≥ 1（含首轮审查）")
     return Settings(
         llm_base_url=os.environ["LLM_BASE_URL"],
         llm_api_key=os.environ["LLM_API_KEY"],
@@ -58,6 +71,10 @@ def load_settings(env_path: str = ".env") -> Settings:
         verify_enabled=os.environ.get("VERIFY_ENABLED", "auto"),
         verify_max_claims=int(os.environ.get("VERIFY_MAX_CLAIMS", "30")),
         verify_concurrency=int(os.environ.get("VERIFY_CONCURRENCY", "4")),
+        redteam_enabled=redteam_enabled,
+        redteam_max_rounds=int(os.environ.get("REDTEAM_MAX_ROUNDS", "1")),
+        redteam_profile=redteam_profile,
+        redteam_max_issues=int(os.environ.get("REDTEAM_MAX_ISSUES", "10")),
         bocha_api_key=os.environ.get("BOCHA_API_KEY", ""),
         llm_profile=os.environ.get("LLM_PROFILE", "cloud"),
         local_base_url=os.environ.get("LOCAL_BASE_URL", "http://localhost:11434/v1"),

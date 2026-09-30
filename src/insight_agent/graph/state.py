@@ -26,6 +26,8 @@ class ResearchState(TypedDict):
     report: str               # writer：最终报告（clean 版）
     annotated_report: str     # verify：逐句标注版（unsupported/partial 加 ⚠️）
     verification: dict        # verify：VerificationReport.to_dict()
+    redteam: dict             # redteam：RedTeamReport.to_dict()（pass 后也落，供 trace/评测消费）
+    redteam_rounds: int       # redteam：已触发的修订轮数（默认 0，硬上限防循环）
     fact_cards: list[str]     # recall：跨主题语义召回的事实卡片
     rounds: int               # 迭代深研轮数（E 模块，deep 档最多 3）
     saved: bool               # archive：是否写回笔记库
