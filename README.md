@@ -4,11 +4,16 @@
 **规划 → 多源搜索 → 深读网页 → 并行取证 → 结构化报告 → 逐句核验 → 对抗审查**，
 带长期语义记忆、成本档位与标准版评测基准。
 
-> 求职作品集项目。姊妹项目 [agent-framework](https://github.com/magickkdd/agent-framework)
-> 是从零手写的教学版框架（State 通道 / Tool Registry / 三层记忆 / 评测门禁），
+> 求职作品集项目。姊妹项目 [MiniClaudeCode](https://github.com/magickkdd/MiniClaudeCode)
+> 是从零手写的终端 Coding Agent（Agent 主循环 / 权限门 / 工具层 / 评测基线），
 > 本项目是"理解原理之后，用成熟框架快速交付"的工程实践。
+> 两者通过 **MCP 真实联动**：本项目把研究能力注册成 MCP server，MiniClaudeCode 自研的
+> stdio JSON-RPC 桥把它接成外部工具，接线过程与四种边界形态实测见
+> [MiniClaudeCode 的 mcp-link-spec](https://github.com/magickkdd/MiniClaudeCode/blob/main/docs/mcp-link-spec.md)。
+> 更早的 [agent-framework](https://github.com/magickkdd/agent-framework) 是从零手写的
+> 教学版框架（State 通道 / Tool Registry / 三层记忆 / 评测门禁）。
 
-## 架构（九节点 + 两个横切层）
+## 架构（九个流水线节点 + 两个入口门卫 + 两个横切层）
 
 ```
 topic
@@ -32,9 +37,13 @@ redteam       报告级对抗审查：证据真实性/逻辑一致性/覆盖面�
 archive       双版本报告落盘 + 证据入档案库 + supported claim 转事实卡片
 ```
 
+进图之前先过两个门卫（`gate` 判断"闲聊还是研究"，`smalltalk` 直接回话不进流水线），
+所以图上这条主链是九个节点，整个 graph 是十一个节点。
+
 横切层：
 - **搜索路由**：Tavily / 博查 / DuckDuckGo 链式降级，熔断（连续 3 败冷却 60s）+ CJK 语言置顶
 - **LLM 工厂**：cloud / local（Ollama）/ hybrid（judge 走本地）三档 profile，Langfuse trace 自动挂载
+  - **local 档跨引擎实测（2026-09-30）**：同一份 Qwen2.5-1.5B 权重在 Ollama 0.34.4 / llama.cpp b11256 / vLLM 0.30.0 三个 OpenAI 兼容端点上跑 `research --depth fast --json`： writer 节点的请求要 5527 token（Ollama）/ 4097 token（vLLM），**4096 上下文的本地引擎会把这一节点 400 掉**；把上下文提到 8192 才稳定跑通。吞吐与九格兼容矩阵见 [MiniClaudeCode 的 inference-bench](https://github.com/magickkdd/MiniClaudeCode/blob/main/docs/inference-bench.md)
 
 ### 入口矩阵（同一 graph、同一记忆层）
 
@@ -97,12 +106,21 @@ uv run python -m insight_agent.eval --tier unit   # 快速回归（分钟级）
 uv run python -m insight_agent.eval --tier e2e    # 全流水线基准（含幻觉率）
 ```
 
+> 评测层要真调模型与搜索，所以**必须先配好 `.env`**（缺项启动即炸，这是有意的 fail-fast）；
+> 不联网的那部分用 `uv run pytest -q`。
+
 36 条用例（12 planner + 10 writer + 1 redteam golden fixture + 13 e2e/golden set）。
 报告含**幻觉率**列、对抗审查判定列、judge 多票一致率、与上次运行的回归 diff。
-评测上线期间实测抓到并修复 4 个缺陷：Token 计量失效、planner 提纲数违规、
+评测上线期间实测抓到并修复 5 个缺陷：Token 计量失效、planner 提纲数违规、
 writer 引用丢 URL、trafilatura 2.x API 变更；redteam 落地时 Token 计量因
-langchain-core 1.x 的 `bind(callbacks=)` 变更再次失效，改为实例级回调挂载（`with_llm_callbacks`）
-—— 详见 `eval/runs/report_*.md`。
+langchain-core 1.x 的 `bind(callbacks=)` 变更再次失效，改为实例级回调挂载
+（`with_llm_callbacks`）—— 判据实现与对应测试见 `src/insight_agent/eval/` 与 `tests/`。
+
+单元测试（离线，不联网、不读 key）：
+
+```bash
+uv run pytest -q                  # 58 passed；需要 uv，或直接用项目 .venv 的 pytest
+```
 
 ## Docker
 
@@ -116,4 +134,4 @@ docker compose up -d langfuse-db langfuse   # 可选：本地 Langfuse trace
 
 LangGraph 1.2（Send map-reduce / conditional edges）· langchain 1.x agents ·
 langchain-openai（任意 OpenAI 兼容端点 + Ollama）· langchain-tavily · ddgs ·
-trafilatura · sqlite-vec · FastAPI SSE · Langfuse · typer · mcp 2.x · pytest · Docker · uv
+trafilatura · sqlite-vec · FastAPI SSE · Langfuse · typer · mcp 2.x（server，stdio / streamable-http 双传输）· pytest（58 项）· Docker · uv
