@@ -14,12 +14,15 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from langchain_openai import ChatOpenAI
 from langchain_tavily import TavilySearch
 
 from insight_agent.config import Settings
+from insight_agent.graph.llm_factory import structured
 from insight_agent.memory.evidence_pool import EvidencePool
 from insight_agent.memory.notes import NotesStore
 from insight_agent.tools.chunker import chunk_text
@@ -75,9 +78,140 @@ class GapJudgement(BaseModel):
     missing_aspects: list[str] = Field(description="不足时需要补充研究的具体子问题（至多 3 个）")
 
 
+def _rename_keys(data: Any, aliases: dict[str, tuple[str, ...]]) -> Any:
+    """把模型自创的键名映射回 schema 的键名。
+
+    **为什么需要。** 实测 `deepseek-v4-flash-0731`（Intern InkStone 平台）返回
+    `{"值得研究": true, ...}` —— 内容对、键名不照schema 来。
+
+    **只认白名单。** 别名表显式列出，不是"找第一个 bool 值"或"取最长字符串" ——
+    那种猜法会在模型输出意外结构时静默给出错误答案，而错误答案比报错贵得多。
+    认不出来就原样返回，让 Pydantic 照实报缺字段。
+
+    键名比对忽略大小写与下划线：`is_research` / `isResearch` / `Is-Research`
+    算同一个键 —— JSON 键名约定各家不一，但这不改变模型的语义判断。
+    """
+    if not isinstance(data, dict):
+        return data
+
+    def norm(key: str) -> str:
+        return key.replace("_", "").replace("-", "").lower()
+
+    present = {norm(k): k for k in data}
+    renamed = dict(data)
+    for canonical, candidates in aliases.items():
+        # 归一后同形但拼写不同（`isResearch` vs `is_research`）也要改回 schema 键名 ——
+        # Pydantic 认的是字面键名，不认"等价"。
+        actual = present.get(norm(canonical))
+        if actual is not None:
+            if actual != canonical:
+                renamed[canonical] = renamed.pop(actual)
+            continue  # 模型已经照 schema 给了（或只是拼写差异），别名不用找
+        for candidate in candidates:
+            actual = present.get(norm(candidate))
+            if actual is not None:
+                renamed[canonical] = renamed.pop(actual)
+                break
+    return renamed
+
+
 class IntentJudgement(BaseModel):
+    """gate 的判定结果。
+
+    键名归一化见 `_rename_keys` —— 有些模型不照 schema 的键名来（实测
+    deepseek-v4-flash-0731 返回 `{"值得研究": true, ...}`）。
+    """
+
     is_research: bool = Field(description="用户输入是否是一个值得联网调研的正式研究主题")
     reason: str = Field(description="一句话理由")
+
+    model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalise_keys(cls, data: Any) -> Any:
+        return _rename_keys(
+            data,
+            {
+                "is_research": (
+                    "isResearch",
+                    "值得研究",
+                    "是否研究",
+                    "需要研究",
+                    "research",
+                    "需要联网搜索",
+                )
+            },
+        )
+
+
+class BriefValidator(BaseModel):
+    """`ResearchBrief` 的容错版。
+
+    **为什么需要它。** `ResearchBrief` 只有一个字段，实测不同模型有三种退化形态
+    （都发生在 `deepseek-v4-flash-0731` 上）：
+
+    1. **塌陷成裸数组** —— 把单字段 wrapper 省掉，直接返回 `["子问题1", ...]`，
+       Pydantic 报 `Input should be an object [input_value=[...]]`。
+    2. **改键名** —— 返回 `{"子问题": [...]}` 或 `{"questions": [...]}`。
+    3. **给子问题配结构** —— 返回
+       `[{"id": 1, "维度": "现状", "子问题": "…做了哪些规定？"}, ...]`，
+       把它当多智能体的分解表在用。
+
+    三种都是**内容对、形态不对**。这里都接住，但**只接白名单里认得出来的**：
+    第 3 种只取已知文本字段，不做「取字典里最长的那个字符串」那种猜法 ——
+    猜出来的错答案比报错贵得多。认不出来照实报错。
+
+    判据在 `tests/test_planner_shape.py`。
+    """
+
+    sub_questions: list[str]
+
+    model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _unwrap_single_field(cls, data: Any) -> Any:
+        if isinstance(data, list):
+            return {"sub_questions": _flatten_questions(data)}
+        renamed = _rename_keys(data, {"sub_questions": ("子问题", "子问题列表", "questions", "subquestions")})
+        if isinstance(renamed, dict) and isinstance(renamed.get("sub_questions"), list):
+            renamed["sub_questions"] = _flatten_questions(renamed["sub_questions"])
+        return renamed
+
+
+#: 子问题里可能是正文的键名（实测模型给的是「子问题」，也有给 question 的）
+_QUESTION_TEXT_KEYS = ("子问题", "question", "text", "内容", "query", "prompt")
+
+#: 端点不支持 `response_format` 时（`llm_factory.NO_STRUCTURED_OUTPUT`），
+#: JSON 的形状只能靠提示词保证。写成「不要输出别的」比只给个正例更有效 ——
+#: 实测这个模型不加这句时会给 Markdown 编号列表（`**1. 现状：…**`）。
+_JSON_SHAPE_HINT = (
+    "\n只输出一个 JSON 对象，不要任何解释文字、不要 Markdown、不要代码块围栏。"
+    '格式：{"sub_questions": ["子问题一", "子问题二", "子问题三"]}'
+)
+
+
+def _flatten_questions(items: list[Any]) -> list[str]:
+    """子问题列表 → 纯字符串列表。
+
+    形态是字符串就原样留着；是字典就按 `_QUESTION_TEXT_KEYS` 取正文，取不到就
+    保留原值让 Pydantic 报错 —— **不做「挑最长的字符串」这种启发式**：模型
+    给了 `{"id": 1, "维度": "现状", "子问题": "…"}` 时，最长的是子问题；但换成
+    别的排版，最长的可能是维度字段，猜错会给出一批语义错乱的问题列表，
+    而那比现在直接报错难查得多。
+    """
+    out: list[Any] = []
+    for item in items:
+        if isinstance(item, dict):
+            picked = next(
+                (item[k] for k in _QUESTION_TEXT_KEYS if isinstance(item.get(k), str)),
+                item,
+            )
+            out.append(picked)
+        else:
+            out.append(item)
+    return out
 
 
 def make_gate(llm: ChatOpenAI, settings: Settings, chats=None):
@@ -101,7 +235,7 @@ def make_gate(llm: ChatOpenAI, settings: Settings, chats=None):
                     f"用户：{t['user'][:80]}\n助手：{t['assistant'][:80]}" for t in turns
                 )
                 hist = f"最近对话（供参考）：\n{recent}\n\n"
-        judgement = llm.with_structured_output(IntentJudgement).invoke(
+        judgement = structured(llm, IntentJudgement).invoke(
             f"{hist}用户输入：{topic}\n\n"
             "判断它是否是一个值得联网搜索调研的正式研究主题（行业/产品/技术/事件/数据等）。"
             "日常寒暄、闲聊、求助对话、无法定义研究范围的话，判为非研究。"
@@ -199,7 +333,7 @@ def make_gap_analyzer(llm: ChatOpenAI, settings: Settings):
         rounds = state.get("rounds", 1)
         if depth != "deep" or rounds >= max_rounds:
             return {"rounds": rounds, "brief": []}
-        judgement = llm.with_structured_output(GapJudgement).invoke(
+        judgement = structured(llm, GapJudgement).invoke(
             f"研究主题：{state['topic']}\n"
             f"研究提纲：{json.dumps(state.get('brief', []), ensure_ascii=False)}\n"
             f"已收集证据（节选）：\n{state.get('compressed_findings', '')[:4000]}\n\n"
@@ -232,7 +366,7 @@ def make_recall(store: NotesStore, card_store=None):
 
 
 def make_planner(llm: ChatOpenAI):
-    structured = llm.with_structured_output(ResearchBrief)
+    structured_llm = structured(llm, BriefValidator)
 
     def planner(state: dict) -> dict:
         # 分级交付：用户点选"深入"时聚焦单问题，跳过拆解（省一次调用，且精确响应点击）
@@ -259,13 +393,16 @@ def make_planner(llm: ChatOpenAI):
                 else ""
             )
             + card_hint
-            + "拆解成 3-5 个具体、可搜索的子问题，覆盖现状、关键玩家、近期动态、风险。"
+            + "拆解成 3-5 个具体、可搜索的子问题，覆盖现状、关键玩家、近期动态、风险。\n"
+            # 形状要求写进提示：端点不支持 response_format 时（见 llm_factory.structured）
+            # JSON 约束就只剩这一句，BriefValidator 再兜住模型改键名/给子问题配结构。
+            + _JSON_SHAPE_HINT
         )
         # 模型偶发不守"至少 3 条"的规矩 → 带反馈重试一次（代码拥有不变量）
         feedback = ""
         brief = None
         for _ in range(2):
-            brief = structured.invoke(base_prompt + feedback)
+            brief = structured_llm.invoke(base_prompt + feedback)
             if len(brief.sub_questions) >= 3:
                 return {"brief": brief.sub_questions}
             feedback = f"\n（注意：你上次只给出 {len(brief.sub_questions)} 条子问题，必须至少 3 条；若主题已充分覆盖则可以为 0 条，但不能是 1-2 条。）"
