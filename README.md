@@ -82,6 +82,47 @@ uv run python -m insight_agent.cli serve --port 8000
 uv run python -m insight_agent.cli research "低空经济的政策进展" --depth standard --json
 ```
 
+### 定时调度
+
+`research` 可以被 cron / 计划任务 / CI 定时调起。**项目不带调度器** —— 自带一个
+循环等于让用户同时维护两套调度；缺的是被调起来之后的运维接口，那在 CLI 这一层。
+
+每次运行落两份文件到 `data/runs/`，文件名是同一个 `run_id`：
+`<utc时间戳>-<主题slug>-<随机>`（刻意不用 UUID —— 这名字是要被人 `ls` 出来看的）。
+
+- `<run_id>.json` —— 结构化台账，给脚本读（`jq -r .termination` 就能判断结果）
+- `<run_id>.log` —— 人读的时间线，失败时的 traceback 在这里
+
+```bash
+bash scripts/scheduled_run.sh "行业周报" --depth fast
+```
+
+退出码语义（`insight_agent/exits.py`，码表收在一处）：
+
+| 码 | 含义 | 调用方该做什么 |
+|---|---|---|
+| 0 | 完成 | 无 |
+| 1 | 验证层异常（幻觉率算不出来等） | 看台账，重试无用 |
+| 2 | 用法 / 配置错 | 改命令或 `.env` |
+| 3 | 限流（429 / 额度耗尽） | **退避后重试** |
+| 4 | 上游不可用（5xx / 连接失败） | **退避后重试** |
+| 5 | 内部异常 | 上报，别重试 |
+| 130 | 中断 | 无 |
+
+分清 3 与 4、进而分清「该不该重试」是这个 Stage 存在的理由：原来退出码只有
+0/1/2，一次限流和一次核验失败长得一样，脚本只能全当失败处理。
+
+`crontab -e` 里的一行：
+
+```cron
+30 8 * * 1-5 cd /path/to/insight-agent && bash scripts/scheduled_run.sh "行业周报" >> /var/log/ia.log 2>&1
+```
+
+成本：默认只记 token 不记钱（各家各时各模型的单价差着数量级，写死会产出
+「看起来精确、实际没人敢用」的数字）。配了 `LLM_PRICE_PER_MTOK` 才换算金额。
+
+规格与判据见 [`docs/SCHEDULING_SPEC.md`](docs/SCHEDULING_SPEC.md)。
+
 MCP 接入（Claude Code 配置示例）：
 
 ```json

@@ -39,6 +39,12 @@ class Settings:
     langfuse_host: str = "http://localhost:3000"
     langfuse_mask_content: bool = False   # true 时只记元数据不记正文
 
+    # ---- 运行台账（SCHEDULING_SPEC §5）----
+    # 单价不配就不记钱：各家各时各模型的 token 单价差着数量级，写死会产出
+    # "看起来精确、实际没人敢用"的成本数字。配了就按 每百万 token 算。
+    price_per_mtok: float = 0.0
+    log_dir: str = "data/runs"
+
 
 def load_settings(env_path: str = ".env") -> Settings:
     load_dotenv(env_path)
@@ -83,4 +89,6 @@ def load_settings(env_path: str = ".env") -> Settings:
         langfuse_secret_key=os.environ.get("LANGFUSE_SECRET_KEY", ""),
         langfuse_host=os.environ.get("LANGFUSE_HOST", "http://localhost:3000"),
         langfuse_mask_content=os.environ.get("LANGFUSE_MASK_CONTENT", "").lower() == "true",
+        price_per_mtok=float(os.environ.get("LLM_PRICE_PER_MTOK", "0") or 0),
+        log_dir=os.environ.get("RUN_LOG_DIR", "data/runs"),
     )
