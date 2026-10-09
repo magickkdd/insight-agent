@@ -248,7 +248,10 @@ Get-Content data/runs/*.json | ConvertFrom-Json | Select-Object run_id,terminati
 
 ## 11. as-built（2026-10-09 实测回填）
 
-**测试**：`uv run pytest -q` → **92 passed**（实施前 58，新增 34 项：`tests/test_runs.py` 22 项 + `tests/test_cli_scheduling.py` 12 项）。全部离线，不花钱。
+**测试**：`uv run pytest -q` → **107 passed**。全部离线，不花钱。
+调度相关 34 项：`tests/test_runs.py` 22 项 + `tests/test_cli_scheduling.py` 12 项；
+结构化输出容错 11 项：`tests/test_planner_shape.py`（为兼容不支持
+`response_format` 的端点而加，见 README「换模型端点」）；此前 58 项。
 
 **端到端**（§8 的验收命令实跑）：临时 `.env` 指向死端口 `http://127.0.0.1:9/v1`，跑
 `bash scripts/scheduled_run.sh "冒烟主题" --depth fast` → 退出码 **4**，分诊分支打出

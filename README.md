@@ -160,8 +160,37 @@ langchain-core 1.x 的 `bind(callbacks=)` 变更再次失效，改为实例级�
 单元测试（离线，不联网、不读 key）：
 
 ```bash
-uv run pytest -q                  # 58 passed；需要 uv，或直接用项目 .venv 的 pytest
+uv run pytest -q                  # 107 passed；需要 uv，或直接用项目 .venv 的 pytest
 ```
+
+## 换模型端点
+
+`langchain-openai` 走任意 OpenAI 兼容端点，换端点改 `.env` 的
+`LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL_ID` 即可。但**不是所有兼容端点都
+一样**，有两个坑：
+
+**1. 端点可能不支持 `response_format`。** 实测 Intern InkStone 科研模型平台
+（`discovery-api.intern-ai.org.cn`，`deepseek-v4-flash-0731`）：
+
+| `response_format` | 结果 |
+| --- | --- |
+| `json_schema` | HTTP 200，content 是**空串** |
+| `json_object` | HTTP 200，content 是**空串** |
+| 不传 | HTTP 200，content 正常返回 JSON |
+
+注意它**不报错** —— 端点是「接受参数然后无视」。langchain 拿到空 content 后会
+从文本里尽力猜 JSON，猜出来的是碎片（表现为 Pydantic 报
+`input_value=2026, input_type=int` 这种莫名其妙的类型错误）。
+
+这种端点把 `.env` 的 `LLM_NO_STRUCTURED_OUTPUT` 打开即可：结构化输出改成
+「JSON 形状写进系统提示 + 代码兜底」（见 `graph/llm_factory.py::structured`）。
+代价是形状靠提示保证、不再由协议强制，所以 `graph/nodes.py` 里的键名归一化与
+`BriefValidator` 容错层必须一起用 —— 别关。
+
+**2. 推理模型慢。** `deepseek-v4-flash-0731` 默认开思考模式，一次 90 token 的
+提问里 76 个 output token 有 53 个是 `reasoning_tokens`。响应时间在 0.7s~60s
+之间波动。实测 `--depth fast` 一次完整研究约 13 分钟（96k tokens）。跑评测前
+先按这个量级估时间，别用默认超时打断它。
 
 ## Docker
 
@@ -175,4 +204,4 @@ docker compose up -d langfuse-db langfuse   # 可选：本地 Langfuse trace
 
 LangGraph 1.2（Send map-reduce / conditional edges）· langchain 1.x agents ·
 langchain-openai（任意 OpenAI 兼容端点 + Ollama）· langchain-tavily · ddgs ·
-trafilatura · sqlite-vec · FastAPI SSE · Langfuse · typer · mcp 2.x（server，stdio / streamable-http 双传输）· pytest（58 项）· Docker · uv
+trafilatura · sqlite-vec · FastAPI SSE · Langfuse · typer · mcp 2.x（server，stdio / streamable-http 双传输）· pytest（107 项）· Docker · uv
