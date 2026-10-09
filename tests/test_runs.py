@@ -50,8 +50,8 @@ def test_only_external_failures_are_retryable():
 
 def test_rate_limit_and_5xx_map_to_distinct_codes():
     """限流（3）与上游不可用（4）要分开：前者额度窗口，后者可能是服务端挂了。"""
-    from openai import APIConnectionError, APIStatusError, RateLimitError
     import httpx
+    from openai import APIConnectionError, APIStatusError, RateLimitError
 
     request = httpx.Request("POST", "https://api.example.com/v1/chat/completions")
     response = httpx.Response(429, request=request)
@@ -66,6 +66,41 @@ def test_rate_limit_and_5xx_map_to_distinct_codes():
         classify_exception(APIConnectionError(request=request))
         is ExitKind.UPSTREAM_UNAVAILABLE
     )
+
+
+def test_a_real_502_through_langchain_is_upstream_unavailable():
+    """5xx 要走**真实链路**验，不能只喂构造的 `APIStatusError`。
+
+    langchain 会把 SDK 的异常包一层：`OpenAIAPIError` 继承自
+    `InternalServerError`（langchain_openai/chat_models/base.py），而后者是
+    `APIStatusError` 的子类 —— 包装过一层之后 `isinstance` 仍认得到、
+    `status_code` 也还在。曾经怀疑这条链会断（写进 SPEC §11 又被实测推翻），
+    留这个用例是为了让它以后真断时立刻响。
+
+    用 `httpx.MockTransport` 让 SDK 收到真的 502 空 body，不联网、不花钱。
+    """
+    import httpx
+    from langchain_openai import ChatOpenAI
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(502, text="")
+
+    llm = ChatOpenAI(
+        model="m",
+        api_key="k",
+        base_url="https://mock.invalid/v1",
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    with pytest.raises(BaseException) as caught:
+        llm.invoke("hi")
+    exc = caught.value
+
+    # 前提断言：确认异常确实是"包装过的 5xx"，而不是别的东西
+    assert "APIStatusError" in [c.__name__ for c in type(exc).__mro__]
+    assert getattr(exc, "status_code", None) == 502
+
+    assert classify_exception(exc) is ExitKind.UPSTREAM_UNAVAILABLE
+    assert should_retry(classify_exception(exc)), "5xx 是外部依赖问题，该退避重试"
 
 
 def test_an_unknown_failure_is_ours_not_a_rate_limit():

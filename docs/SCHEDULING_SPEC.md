@@ -278,12 +278,30 @@ Get-Content data/runs/*.json | ConvertFrom-Json | Select-Object run_id,terminati
   退出码 4）。这样才验到分诊分支 —— 假 key 若配了真端点会真的花钱，而要验的
   恰恰是「失败时怎么办」。
 
-### 本 Stage 没有解决的（与 §9 边界一致）
+### 一条被自己推翻的怀疑（留着，因为它验过东西）
 
-- 退出码 3 与 4 的区分**依赖上游真的抛 `RateLimitError` / 5xx**。实测这次拿到的是
-  `OpenAIAPIError(502)`，说明不同厂商（这里是 agnes）把 5xx 包成了通用错误类 ——
-  `classify_exception` 靠 `isinstance` 认 `APIStatusError`，遇到更外层的包装就归到
-  `internal_error`（5）而不是 `upstream_unavailable`（4）。**这是个真实的未覆盖形态**：
-  §6 S2 里的 5xx 用例用的是 `APIStatusError`，过的是构造的异常，不是真实包装。
-  修法要么在 `classify_exception` 里加一层按 `status_code` 属性的兜底，要么让 SDK
-  别包装。**留作下一轮的 TODO**，写在这里而不是假装它成立。
+起草本文时曾记下一条 TODO：「真实厂商把 5xx 包成通用 `OpenAIAPIError`，
+`classify_exception` 靠 `isinstance` 认不到，会归到 `internal_error(5)` 而不是
+`upstream_unavailable(4)`」。
+
+**这条是误判，推翻。** 用 `httpx.MockTransport` 让 SDK 收到真的 502 空 body，
+再走完整链路 `ChatOpenAI.invoke`，实测：
+
+```
+异常类: OpenAIAPIError
+MRO: OpenAIAPIError → InternalServerError → APIStatusError → APIError → OpenAIError → ModelAPIError
+status_code: 502
+classify_exception → UPSTREAM_UNAVAILABLE   ← 正确
+```
+
+`OpenAIAPIError` 继承自 `InternalServerError`（langchain_openai `chat_models/base.py:668`），
+而 `InternalServerError` 是 `APIStatusError` 的子类，所以 `isinstance` 认得到、
+`status_code` 也还在。之前那次端到端实测的台账记的也正是
+`termination=upstream_unavailable / exit_code=4`，与本文 §11 首段一致 ——
+是这条 TODO 本身写错了，不是代码错了。
+
+**保留这条的价值**：它证明 §9 那句「限流判定靠异常类型与状态码，不同 SDK 抛的
+异常类不一样，这一层在各 SDK 上都要各自试过才算数」不是空话 —— 当时确实
+以为有个漏洞，去验了，验完是没有。判据 S2 里那条 5xx 用例从此改成走真实
+langchain 链路（`test_a_real_502_through_langchain_is_upstream_unavailable`），
+不再用构造的 `APIStatusError`。
